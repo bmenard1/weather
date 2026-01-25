@@ -20,45 +20,67 @@
             align-items: center;
             justify-content: flex-start;
             padding: 0 20px;
-            padding-top: 12vh;
+            padding-top: 5vh;
             position: relative;
+            /* Prevent horizontal scroll from swipe gestures */
+            overflow-x: hidden;
+        }
+
+        /* Weather display wrapper - keeps sky and temperature together as one unit */
+        .weather-display-wrapper {
+            position: relative;
+            width: 100%;
+            z-index: 1;
+            overflow: visible;
+            /* Padding reduced since temp curve moved up 200px */
+            padding-bottom: 50px;
         }
 
         #tempCurveCanvas {
-            position: fixed;
+            position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
             pointer-events: none;
             z-index: 0;
         }
 
         #windCanvas {
-            position: fixed;
+            position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
             pointer-events: none;
             z-index: 1;
         }
 
         #tempCurveOverlay {
-            position: fixed;
+            position: absolute;
             pointer-events: auto;
             z-index: 5;
+        }
+
+        /* Tooltips - fixed on desktop for smooth tracking */
+        .temp-tooltip, .sky-tooltip {
+            position: fixed;
+        }
+
+        /* On touch devices, everything in the wrapper scrolls together */
+        .touch-device .weather-display-wrapper .temp-tooltip,
+        .touch-device .weather-display-wrapper .sky-tooltip {
+            position: absolute;
         }
 
 
         .container {
             width: 100%;
             max-width: 1200px;
+            margin: 0 auto;
             display: flex;
             flex-direction: column;
             gap: 20px;
             position: relative;
-            z-index: 1;
+            z-index: 2;
+            /* Position the sky ribbon at the top of the wrapper */
+            padding-top: 10px;
         }
 
         .ribbon-row {
@@ -125,11 +147,11 @@
             justify-content: center;
             align-items: center;
             gap: 10px;
-            position: fixed;
-            top: 50vh;
+            position: absolute;
+            bottom: 81px;
             left: 0;
             right: 0;
-            z-index: 2;
+            z-index: 10;
         }
 
         .day-selector-content {
@@ -259,7 +281,6 @@
         }
 
         .temp-tooltip, .sky-tooltip {
-            position: fixed;
             background: rgba(0, 0, 0, 0.75);
             color: #fff;
             padding: 4px 8px;
@@ -272,32 +293,139 @@
             margin-top: -10px;
         }
 
+        /* Responsive styles for mobile */
+        @media (max-width: 768px) {
+            body {
+                padding: 0 10px;
+                padding-top: 3vh;
+            }
+
+            .container {
+                padding-top: 5px;
+            }
+
+            .weather-display-wrapper {
+                padding-bottom: 40px;
+            }
+
+            .day-selector {
+                bottom: 81px;
+            }
+
+            .day-selector-content {
+                width: 260px;
+            }
+
+            .day-label {
+                font-size: 0.8rem;
+                width: 150px;
+            }
+
+            .city-label {
+                font-size: 0.8rem;
+                min-width: 100px;
+            }
+
+            .ribbon-wrapper {
+                height: 80px;
+            }
+
+            .ribbon-wrapper.dynamic-height {
+                min-height: 80px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 0 5px;
+                padding-top: 2vh;
+            }
+
+            .container {
+                padding-top: 5px;
+            }
+
+            .weather-display-wrapper {
+                padding-bottom: 30px;
+            }
+
+            .day-selector {
+                bottom: 103px;
+                gap: 5px;
+            }
+
+            .day-selector-content {
+                width: 220px;
+                flex-direction: column;
+                gap: 2px;
+            }
+
+            .day-label {
+                font-size: 0.75rem;
+                width: 180px;
+            }
+
+            .city-label {
+                font-size: 0.75rem;
+                min-width: 80px;
+            }
+        }
+
+        /* Hide arrows on touch devices */
+        .touch-device .day-arrow {
+            display: none;
+        }
+
+        .touch-device .day-selector {
+            gap: 0;
+        }
+
+        /* Swipe indicator for touch devices */
+        .swipe-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+
+        .swipe-indicator.hidden {
+            opacity: 0;
+        }
 
     </style>
 </head>
 <body>
-    <canvas id="tempCurveCanvas"></canvas>
-    <canvas id="windCanvas"></canvas>
-    <div id="tempCurveOverlay"></div>
-    <div class="temp-tooltip" id="tempTooltip"></div>
+    <div class="weather-display-wrapper" id="weatherDisplayWrapper">
+        <canvas id="tempCurveCanvas"></canvas>
+        <canvas id="windCanvas"></canvas>
+        <div id="tempCurveOverlay"></div>
+        <div class="temp-tooltip" id="tempTooltip"></div>
 
-    <div class="container">
-        <div class="ribbon-row">
-            <div class="ribbon-wrapper dynamic-height">
-                <canvas id="skyRibbon" class="ribbon-canvas"></canvas>
+        <div class="container">
+            <div class="ribbon-row">
+                <div class="ribbon-wrapper dynamic-height">
+                    <canvas id="skyRibbon" class="ribbon-canvas"></canvas>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="sky-tooltip" id="skyTooltip"></div>
+        <div class="sky-tooltip" id="skyTooltip"></div>
 
-    <div class="day-selector">
-        <button class="day-arrow" id="prevDay">&#8592;</button>
-        <div class="day-selector-content">
-            <span class="city-label" id="cityLabel">Baltimore</span>
-            <span class="day-label" id="dayLabel">Today</span>
+        <div class="day-selector">
+            <button class="day-arrow" id="prevDay">&#8592;</button>
+            <div class="day-selector-content">
+                <span class="city-label" id="cityLabel">Baltimore</span>
+                <span class="day-label" id="dayLabel">Today</span>
+            </div>
+            <button class="day-arrow" id="nextDay">&#8594;</button>
         </div>
-        <button class="day-arrow" id="nextDay">&#8594;</button>
     </div>
+    <div class="swipe-indicator" id="swipeIndicator">swipe left/right to change day</div>
 
     <script>
         // City coordinates for weather API
@@ -682,8 +810,8 @@
 
             // Calculate dimensions
             const fullBaseHeight = 240; // Full height for the sky/cloud portion (doubled)
-            const skyExtensionHeight = 60; // Sky gradient fade distance
-            const precipExtensionHeight = 280; // Rain/snow extends much further down over page background
+            const skyExtensionHeight = 36; // Sky gradient fade distance (reduced by 40%)
+            const precipExtensionHeight = 200; // Rain/snow extends down over page background
             const fullTotalHeight = fullBaseHeight + precipExtensionHeight;
 
             // Crop top portion of the sky (removes cloud puffs, shows only lower sky gradient)
@@ -802,7 +930,34 @@
                 }
             }
 
-            // Draw stars at night (v2 style, hidden when clouds cover sky)
+            // Draw night sky darkening overlay - limited to sky portion (skyFadeEndY)
+            for (let x = 0; x < width; x++) {
+                const t = x / width;
+                const dayValue = interpolateData(weatherData.daylight, t);
+                const cloudValue = interpolateData(weatherData.clouds, t);
+
+                // Night darkness intensity - stronger at night, fades during twilight
+                const nightness = 1 - smoothstep(0.0, 0.4, dayValue);
+
+                if (nightness > 0.01) {
+                    // Dark blue-black overlay for night sky
+                    // Slightly lighter when cloudy (clouds reflect ambient light)
+                    const cloudLightening = cloudValue * 0.3;
+                    const darkness = nightness * (0.7 - cloudLightening);
+
+                    // Create gradient from top to skyFadeEndY (sky portion only, not precipitation area)
+                    const gradient = ctx.createLinearGradient(x, cropAmount, x, skyFadeEndY);
+                    gradient.addColorStop(0, `rgba(5, 8, 20, ${darkness})`);
+                    gradient.addColorStop(0.5, `rgba(8, 12, 28, ${darkness * 0.8})`);
+                    gradient.addColorStop(0.85, `rgba(10, 15, 35, ${darkness * 0.4})`);
+                    gradient.addColorStop(1, `rgba(12, 18, 40, 0)`);
+
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(x, cropAmount, 1.5, skyFadeEndY - cropAmount);
+                }
+            }
+
+            // Draw stars at night - limited to sky portion (skyFadeEndY)
             for (let x = 0; x < width; x++) {
                 const t = x / width;
                 const dayValue = interpolateData(weatherData.daylight, t);
@@ -816,7 +971,8 @@
 
                 if (combinedVisibility > 0.01) {
                     const starChance = combinedVisibility * 0.045;
-                    for (let y = cropAmount; y < skyHeight; y += 8) {
+                    // Stars limited to sky portion only (skyFadeEndY), not precipitation area
+                    for (let y = cropAmount; y < skyFadeEndY; y += 8) {
                         if (noise(x, y) < starChance) {
                             ctx.fillStyle = `rgba(255, 255, 255, ${combinedVisibility * 0.6 * noise(x + 100, y)})`;
                             ctx.beginPath();
@@ -824,35 +980,6 @@
                             ctx.fill();
                         }
                     }
-                }
-            }
-
-            // Add dark cloud base for heavy clouds - fades within sky extension area
-            for (let x = 0; x < width; x++) {
-                const t = x / width;
-                const cloudValue = interpolateData(weatherData.clouds, t);
-                const rainValue = interpolateData(weatherData.rain, t);
-                const dayValue = interpolateData(weatherData.daylight, t);
-
-                if (cloudValue > 0.5) {
-                    const darkness = (cloudValue - 0.5) * 2;
-                    const rainDarkness = rainValue * 0.5;
-
-                    // Adjust base color for time of day using smooth transitions
-                    const nightBase = 40 - rainValue * 20;
-                    const dayBase = 120 - rainValue * 40;
-                    const dayBlendBase = smoothstep(0.15, 0.55, dayValue);
-                    const grayBase = nightBase + (dayBase - nightBase) * dayBlendBase;
-
-                    // Dark cloud base fades within sky extension area
-                    const cloudFadeEnd = skyFadeEndY * 0.8;
-                    const gradient = ctx.createLinearGradient(x, skyHeight * 0.4, x, cloudFadeEnd);
-                    gradient.addColorStop(0, `rgba(${grayBase + 30}, ${grayBase + 35}, ${grayBase + 45}, 0)`);
-                    gradient.addColorStop(0.4, `rgba(${grayBase + 10}, ${grayBase + 15}, ${grayBase + 25}, ${darkness * 0.5})`);
-                    gradient.addColorStop(0.7, `rgba(${grayBase}, ${grayBase + 5}, ${grayBase + 15}, ${(darkness + rainDarkness) * 0.6})`);
-                    gradient.addColorStop(1, `rgba(${grayBase}, ${grayBase + 5}, ${grayBase + 15}, 0)`);
-                    ctx.fillStyle = gradient;
-                    ctx.fillRect(x, skyHeight * 0.4, 1.5, cloudFadeEnd - skyHeight * 0.4);
                 }
             }
 
@@ -982,15 +1109,25 @@
         // Temperature Curve on page background
         function drawTemperatureCurve() {
             const canvas = document.getElementById('tempCurveCanvas');
+            const wrapper = document.getElementById('weatherDisplayWrapper');
+            const skyRibbonEl = document.getElementById('skyRibbon');
             const ctx = canvas.getContext('2d');
 
-            // Set canvas to full window size
-            canvas.width = window.innerWidth * 2;
-            canvas.height = window.innerHeight * 2;
-            ctx.scale(2, 2);
-
+            // Get wrapper and sky ribbon dimensions for relative positioning
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const skyRect = skyRibbonEl.getBoundingClientRect();
             const width = window.innerWidth;
-            const height = window.innerHeight;
+            const height = wrapperRect.height || window.innerHeight * 0.6;
+
+            // Calculate sky ribbon position relative to wrapper
+            const skyBottomInWrapper = (skyRect.bottom - wrapperRect.top);
+
+            // Set canvas to wrapper size
+            canvas.width = width * 2;
+            canvas.height = height * 2;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            ctx.scale(2, 2);
 
             // Temperature colors: white → blue → yellow → orange → red
             // Smooth transitions between temperature ranges
@@ -1046,9 +1183,15 @@
             }
 
             // Draw the temperature curve with gradient fill
-            const curveHeight = height * 0.22; // Curve occupies 22% of screen height
-            const curveTop = height * 0.25; // Start curve at 25% down the screen (closer to sky)
-            const curveBottom = curveTop + curveHeight;
+            // Position curve so the top of the reference line (40°C) aligns with sky ribbon bottom
+            // Then move up by 200px
+            const curveHeight = Math.min(height * 0.264, 144); // Curve height, capped
+            // The reference line top is at curveBottom - (maxTempNorm * curveHeight * 0.8)
+            // where maxTempNorm = (45 + 25) / 60 = 1.167 (clamped to ~1)
+            // So reference line top offset from curveBottom is about curveHeight * 0.8
+            // We want that point to be at skyBottomInWrapper, then shift up 200px
+            const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
+            const curveTop = curveBottom - curveHeight;
 
             // Calculate bounds to match sky ribbon (max-width: 1200px, centered)
             const maxRibbonWidth = 1200;
@@ -1200,17 +1343,15 @@
                 // Calculate X position within the ribbon bounds
                 const markerX = ribbonLeft + currentTimeT * ribbonWidth;
 
-                // Get the actual position of the sky ribbon element
-                const skyRibbonEl = document.getElementById('skyRibbon');
-                const skyRect = skyRibbonEl.getBoundingClientRect();
-                const skyTopY = skyRect.top - 2;  // 2 pixels above the sky display
+                // Get the actual position of the sky ribbon element relative to wrapper
+                const skyTopInWrapper = (skyRect.top - wrapperRect.top) - 2;  // 2 pixels above the sky display
 
                 // Draw a small triangle with bottom tip 2px above sky
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
                 ctx.beginPath();
-                ctx.moveTo(markerX, skyTopY);             // Bottom tip 2px above sky
-                ctx.lineTo(markerX - 5, skyTopY - 8);     // Top left
-                ctx.lineTo(markerX + 5, skyTopY - 8);     // Top right
+                ctx.moveTo(markerX, skyTopInWrapper);             // Bottom tip 2px above sky
+                ctx.lineTo(markerX - 5, skyTopInWrapper - 8);     // Top left
+                ctx.lineTo(markerX + 5, skyTopInWrapper - 8);     // Top right
                 ctx.closePath();
                 ctx.fill();
             }
@@ -1229,10 +1370,19 @@
 
         // Get wind display boundaries in screen coordinates
         function getWindBounds() {
-            const height = window.innerHeight;
-            const curveHeight = height * 0.22;
-            const curveTop = height * 0.25;
-            const curveBottom = curveTop + curveHeight;
+            const wrapper = document.getElementById('weatherDisplayWrapper');
+            const skyRibbonEl = document.getElementById('skyRibbon');
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const skyRect = skyRibbonEl.getBoundingClientRect();
+            const height = wrapperRect.height || window.innerHeight * 0.6;
+
+            // Calculate sky ribbon position relative to wrapper
+            const skyBottomInWrapper = (skyRect.bottom - wrapperRect.top);
+
+            // Match the temperature curve positioning (shifted up 200px)
+            const curveHeight = Math.min(height * 0.264, 144);
+            const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
+            const curveTop = curveBottom - curveHeight;
 
             // Wind starts at 40°C line on temperature curve
             // Temperature normalization: (temp + 25) / 60, so 40°C = (40 + 25) / 60 = 1.083 (clamped to 1)
@@ -1291,15 +1441,20 @@
         // Draw animated wind streaks
         function drawWindAnimation(timestamp) {
             const canvas = document.getElementById('windCanvas');
+            const wrapper = document.getElementById('weatherDisplayWrapper');
             const ctx = canvas.getContext('2d');
 
-            // Set canvas to full window size with retina support
-            canvas.width = window.innerWidth * 2;
-            canvas.height = window.innerHeight * 2;
-            ctx.scale(2, 2);
-
+            // Get wrapper dimensions for relative positioning
+            const wrapperRect = wrapper.getBoundingClientRect();
             const width = window.innerWidth;
-            const height = window.innerHeight;
+            const height = wrapperRect.height || window.innerHeight * 0.6;
+
+            // Set canvas to wrapper size with retina support
+            canvas.width = width * 2;
+            canvas.height = height * 2;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            ctx.scale(2, 2);
 
             // Clear canvas
             ctx.clearRect(0, 0, width, height);
@@ -1313,9 +1468,13 @@
             const time = timestamp / 1000;
 
             // Temperature curve parameters (same as in drawTemperatureCurve)
-            const curveHeight = height * 0.22;
-            const curveTop = height * 0.25;
-            const curveBottom = curveTop + curveHeight;
+            // Get sky ribbon position for proper curve placement
+            const skyRibbonEl = document.getElementById('skyRibbon');
+            const skyRect = skyRibbonEl.getBoundingClientRect();
+            const skyBottomInWrapper = (skyRect.bottom - wrapperRect.top);
+            const curveHeight = Math.min(height * 0.264, 144);
+            const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
+            const curveTop = curveBottom - curveHeight;
 
             // Horizontal orientation
             const angle = 0;
@@ -1404,8 +1563,9 @@
 
         // Initialize all visualizations (static, no animation)
         function draw() {
-            drawTemperatureCurve();
+            // Draw sky ribbon first so its dimensions are available for temperature curve positioning
             drawSkyRibbon();
+            drawTemperatureCurve();
             startWindAnimation();
         }
 
@@ -1642,15 +1802,24 @@
 
         // Position the overlay to cover the temperature curve area
         function updateOverlayPosition() {
+            const wrapper = document.getElementById('weatherDisplayWrapper');
+            const skyRibbonEl = document.getElementById('skyRibbon');
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const skyRect = skyRibbonEl.getBoundingClientRect();
             const width = window.innerWidth;
-            const height = window.innerHeight;
+            const height = wrapperRect.height || window.innerHeight * 0.6;
+
+            // Calculate sky ribbon position relative to wrapper
+            const skyBottomInWrapper = (skyRect.bottom - wrapperRect.top);
 
             const maxRibbonWidth = 1200;
             const ribbonWidth = Math.min(width - 40, maxRibbonWidth);
             const ribbonLeft = (width - ribbonWidth) / 2;
 
-            const curveHeight = height * 0.22;
-            const curveTop = height * 0.25;
+            // Match the temperature curve positioning (shifted up 200px)
+            const curveHeight = Math.min(height * 0.264, 144);
+            const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
+            const curveTop = curveBottom - curveHeight;
 
             tempOverlay.style.left = `${ribbonLeft}px`;
             tempOverlay.style.top = `${curveTop}px`;
@@ -1762,6 +1931,82 @@
         skyRibbon.addEventListener('mouseleave', () => {
             skyTooltip.style.display = 'none';
         });
+
+        // Touch device detection and swipe gestures
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+        if (isTouchDevice) {
+            document.body.classList.add('touch-device');
+
+            // Show swipe indicator briefly, then hide it
+            const swipeIndicator = document.getElementById('swipeIndicator');
+            setTimeout(() => {
+                swipeIndicator.classList.add('hidden');
+            }, 3000);
+
+            // Swipe gesture handling
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let touchEndX = 0;
+            let touchEndY = 0;
+            let isSwiping = false;
+
+            const minSwipeDistance = 50; // Minimum swipe distance in pixels
+            const maxVerticalDistance = 100; // Maximum vertical movement to count as horizontal swipe
+
+            document.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+                touchStartY = e.changedTouches[0].screenY;
+                isSwiping = true;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!isSwiping) return;
+
+                touchEndX = e.changedTouches[0].screenX;
+                touchEndY = e.changedTouches[0].screenY;
+
+                // Calculate movement
+                const deltaX = Math.abs(touchEndX - touchStartX);
+                const deltaY = Math.abs(touchEndY - touchStartY);
+
+                // If vertical movement is dominant, allow normal scrolling
+                // Only prevent default for clear horizontal swipes
+                if (deltaX > deltaY && deltaX > 20) {
+                    // Horizontal swipe detected - this is for date navigation
+                    // We don't prevent default here to allow smooth experience
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', async (e) => {
+                if (!isSwiping) return;
+                isSwiping = false;
+
+                touchEndX = e.changedTouches[0].screenX;
+                touchEndY = e.changedTouches[0].screenY;
+
+                const deltaX = touchEndX - touchStartX;
+                const deltaY = Math.abs(touchEndY - touchStartY);
+
+                // Only trigger date change for horizontal swipes
+                // that don't have too much vertical movement
+                if (Math.abs(deltaX) >= minSwipeDistance && deltaY < maxVerticalDistance) {
+                    if (deltaX < 0 && currentDayOffset < maxDayOffset) {
+                        // Swipe left = next day
+                        currentDayOffset++;
+                        await refreshView();
+                    } else if (deltaX > 0 && currentDayOffset > 0) {
+                        // Swipe right = previous day
+                        currentDayOffset--;
+                        await refreshView();
+                    }
+                }
+            }, { passive: true });
+        } else {
+            // Hide swipe indicator on non-touch devices
+            const swipeIndicator = document.getElementById('swipeIndicator');
+            swipeIndicator.style.display = 'none';
+        }
 
         // Start - initialize with current city and day
         refreshView();
