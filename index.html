@@ -55,7 +55,7 @@
         #tempCurveOverlay {
             position: absolute;
             pointer-events: auto;
-            z-index: 5;
+            z-index: 10;
         }
 
         /* Tooltips - fixed on desktop for smooth tracking */
@@ -430,6 +430,7 @@
     <script>
         // City coordinates for weather API
         const cities = {
+            'riyadh': { name: 'Riyadh', lat: 24.69, lon: 46.72, timezone: 'Asia/Riyadh' },
             'baltimore': { name: 'Baltimore', lat: 39.29, lon: -76.61, timezone: 'America/New_York' },
             'mexico-city': { name: 'Mexico City', lat: 19.43, lon: -99.13, timezone: 'America/Mexico_City' },
             'brasilia': { name: 'Brasília', lat: -15.79, lon: -47.88, timezone: 'America/Sao_Paulo' },
@@ -442,7 +443,7 @@
         // Current state
         let currentCity = 'baltimore';
         let currentDayOffset = 0; // 0 = today, 1 = tomorrow, etc.
-        const maxDayOffset = 10; // Today + 10 days ahead
+        const maxDayOffset = 14; // Today + 14 days ahead
 
         // Current weather data
         let fullWeatherData = null;
@@ -597,7 +598,7 @@
             return { sunrise, sunset };
         }
 
-        // Slice weather data to show 2h before sunrise to 2h after sunset
+        // Get display range: 2h before sunrise to 2h after sunset
         function getDisplayRange(data) {
             const { sunrise, sunset } = findSunriseSunset(data.daylight);
             const startHour = Math.max(0, sunrise - 2);
@@ -609,9 +610,66 @@
             return data.slice(startHour, endHour + 1);
         }
 
+        // Store display range for proper interpolation mapping
+        let displayStartHour = 0;
+        let displayEndHour = 23;
+
+        // Store temperature display range (mean ± 10°C) for current location
+        // These are normalized values (0-1 representing -25°C to +35°C)
+        let tempDisplayMin = 0;  // Will be updated when location changes
+        let tempDisplayMax = 1;  // Will be updated when location changes
+        let tempRangeCity = null; // Track which city the temp range was calculated for
+
+        // Map a normalized temperature (0-1) to display Y position fraction
+        // Returns 0 at tempDisplayMin and 1 at tempDisplayMax
+        function mapTempToDisplayRange(tempValue) {
+            if (tempDisplayMax === tempDisplayMin) return 0.5;
+            return (tempValue - tempDisplayMin) / (tempDisplayMax - tempDisplayMin);
+        }
+
+        // Calculate mean temperature across all forecast days for a location
+        async function calculateLocationTempRange(cityKey) {
+            let totalTemp = 0;
+            let count = 0;
+
+            // Fetch temperature data for day 0 and day 14 only (for faster loading)
+            const sampleDays = [0, maxDayOffset];
+            for (const day of sampleDays) {
+                try {
+                    const dayData = await fetchWeatherData(cityKey, day);
+                    if (dayData && dayData.temperature) {
+                        // Sum all hourly temperatures
+                        for (const temp of dayData.temperature) {
+                            totalTemp += temp;
+                            count++;
+                        }
+                    }
+                } catch (e) {
+                    // Skip days that fail to fetch
+                    console.log(`Skipped day ${day} for temp range calculation`);
+                }
+            }
+
+            if (count > 0) {
+                const meanTemp = totalTemp / count;
+                // Mean - 10°C to Mean + 15°C (asymmetric range)
+                // In normalized space: 10°C = 10/60, 15°C = 15/60
+                const rangeBelow = 10 / 60;
+                const rangeAbove = 15 / 60;
+                tempDisplayMin = Math.max(0, meanTemp - rangeBelow);
+                tempDisplayMax = Math.min(1, meanTemp + rangeAbove);
+                console.log(`Temp range for ${cityKey}: mean=${((meanTemp * 60) - 25).toFixed(1)}°C, display range: ${((tempDisplayMin * 60) - 25).toFixed(1)}°C to ${((tempDisplayMax * 60) - 25).toFixed(1)}°C`);
+            }
+        }
+
         async function updateWeatherData(cityKey, dayOffset = 0) {
             fullWeatherData = await fetchWeatherData(cityKey, dayOffset);
             const { startHour, endHour } = getDisplayRange(fullWeatherData);
+
+            // Store display range for interpolation
+            displayStartHour = startHour;
+            displayEndHour = endHour;
+
             weatherData = {
                 daylight: sliceWeatherData(fullWeatherData.daylight, startHour, endHour),
                 clouds: sliceWeatherData(fullWeatherData.clouds, startHour, endHour),
@@ -620,6 +678,8 @@
                 precipProbability: sliceWeatherData(fullWeatherData.precipProbability, startHour, endHour),
                 snow: fullWeatherData.snow ? sliceWeatherData(fullWeatherData.snow, startHour, endHour) : null,
                 snowCm: sliceWeatherData(fullWeatherData.snowCm, startHour, endHour),
+                // Keep full 24-hour temperature data for proper Catmull-Rom interpolation at edges
+                temperatureFull: fullWeatherData.temperature,
                 temperature: sliceWeatherData(fullWeatherData.temperature, startHour, endHour),
                 windSpeed: sliceWeatherData(fullWeatherData.windSpeed, startHour, endHour),
                 windSpeedRaw: sliceWeatherData(fullWeatherData.windSpeedRaw, startHour, endHour),
@@ -652,6 +712,11 @@
 
         // Refresh the current view
         async function refreshView() {
+            // Recalculate temperature display range when city changes
+            if (tempRangeCity !== currentCity) {
+                await calculateLocationTempRange(currentCity);
+                tempRangeCity = currentCity;
+            }
             await updateWeatherData(currentCity, currentDayOffset);
             updateDayLabel();
             draw();
@@ -673,11 +738,50 @@
             return data[i0] + (data[i1] - data[i0]) * smoothstep(0, 1, frac);
         }
 
-        // Catmull-Rom spline interpolation for extra smooth curves (used for temperature)
-        function interpolateDataSmooth(data, t) {
+        // Catmull-Rom spline interpolation for smooth curves
+        // For temperature data with useFullTemperatureData=true, uses full 24-hour data
+        // to avoid edge flattening at display boundaries
+        function interpolateDataSmooth(data, t, useFullTemperatureData = false) {
+            // For temperature: use full 24-hour data with hour-based indexing
+            if (useFullTemperatureData && weatherData.temperatureFull) {
+                const fullData = weatherData.temperatureFull;
+
+                // Map t (0-1 over display range) to actual hour in 24-hour data
+                const displayHours = displayEndHour - displayStartHour;
+                const hour = displayStartHour + t * displayHours;
+
+                // Catmull-Rom needs 4 control points around the target hour
+                // Use proper indexing into full 24-hour array
+                const i1 = Math.min(23, Math.max(0, Math.floor(hour)));
+                const i0 = Math.max(0, i1 - 1);
+                const i2 = Math.min(23, i1 + 1);
+                const i3 = Math.min(23, i1 + 2);
+                const frac = hour - i1;
+
+                // Get temperature values at these hours
+                const p0 = fullData[i0];
+                const p1 = fullData[i1];
+                const p2 = fullData[i2];
+                const p3 = fullData[i3];
+
+                // Catmull-Rom spline formula with tension=0.5 (standard)
+                const tt = frac * frac;
+                const ttt = tt * frac;
+
+                return 0.5 * (
+                    (2 * p1) +
+                    (-p0 + p2) * frac +
+                    (2 * p0 - 5 * p1 + 4 * p2 - p3) * tt +
+                    (-p0 + 3 * p1 - 3 * p2 + p3) * ttt
+                );
+            }
+
+            // For other data: use array-index-based interpolation
             const len = data.length;
+            if (len < 2) return data[0] || 0;
+
             const idx = t * (len - 1);
-            const i1 = Math.floor(idx);
+            const i1 = Math.min(len - 1, Math.max(0, Math.floor(idx)));
             const i0 = Math.max(0, i1 - 1);
             const i2 = Math.min(len - 1, i1 + 1);
             const i3 = Math.min(len - 1, i1 + 2);
@@ -941,15 +1045,24 @@
 
                 if (nightness > 0.01) {
                     // Dark blue-black overlay for night sky
-                    // Slightly lighter when cloudy (clouds reflect ambient light)
-                    const cloudLightening = cloudValue * 0.3;
-                    const darkness = nightness * (0.7 - cloudLightening);
+                    // When cloud cover >= 50%, darken the sky more (heavy clouds block light pollution)
+                    // When cloud cover < 50%, slightly lighter (some ambient light)
+                    let darkness;
+                    if (cloudValue >= 0.5) {
+                        // Heavy clouds at night - darker sky
+                        const heavyCloudDarkening = (cloudValue - 0.5) * 0.4; // Extra darkening for heavy clouds
+                        darkness = nightness * (0.75 + heavyCloudDarkening);
+                    } else {
+                        // Light/no clouds at night - slightly lighter
+                        const cloudLightening = cloudValue * 0.2;
+                        darkness = nightness * (0.7 - cloudLightening);
+                    }
 
                     // Create gradient from top to skyFadeEndY (sky portion only, not precipitation area)
                     const gradient = ctx.createLinearGradient(x, cropAmount, x, skyFadeEndY);
                     gradient.addColorStop(0, `rgba(5, 8, 20, ${darkness})`);
-                    gradient.addColorStop(0.5, `rgba(8, 12, 28, ${darkness * 0.8})`);
-                    gradient.addColorStop(0.85, `rgba(10, 15, 35, ${darkness * 0.4})`);
+                    gradient.addColorStop(0.5, `rgba(8, 12, 28, ${darkness * 0.85})`);
+                    gradient.addColorStop(0.85, `rgba(10, 15, 35, ${darkness * 0.5})`);
                     gradient.addColorStop(1, `rgba(12, 18, 40, 0)`);
 
                     ctx.fillStyle = gradient;
@@ -1193,22 +1306,22 @@
             const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
             const curveTop = curveBottom - curveHeight;
 
-            // Calculate bounds to match sky ribbon (max-width: 1200px, centered)
-            const maxRibbonWidth = 1200;
-            const ribbonWidth = Math.min(width - 40, maxRibbonWidth); // 40px for padding (20px each side)
-            const ribbonLeft = (width - ribbonWidth) / 2;
-            const ribbonRight = ribbonLeft + ribbonWidth;
+            // Get sky ribbon bounds relative to the canvas (which starts at 0)
+            // skyRect is in screen coordinates, so subtract the wrapper's left position
+            const ribbonLeft = skyRect.left - wrapperRect.left;
+            const ribbonRight = skyRect.right - wrapperRect.left;
+            const ribbonWidth = ribbonRight - ribbonLeft;
 
             // First pass: draw filled area under the curve with gradient
             // Use smooth Catmull-Rom interpolation for temperature
             for (let x = Math.floor(ribbonLeft); x < Math.ceil(ribbonRight); x++) {
                 const t = (x - ribbonLeft) / ribbonWidth;
-                const tempValue = interpolateDataSmooth(weatherData.temperature, t);
+                const tempValue = interpolateDataSmooth(weatherData.temperature, t, true);
                 const dayValue = interpolateData(weatherData.daylight, t);
                 const brightness = getDaylightBrightness(dayValue);
 
                 const color = getTempColor(tempValue);
-                const curveY = curveBottom - (tempValue * curveHeight * 0.8);
+                const curveY = curveBottom - (mapTempToDisplayRange(tempValue) * curveHeight * 0.8);
 
                 // Create vertical gradient from curve to bottom - fades rapidly
                 const gradient = ctx.createLinearGradient(x, curveY, x, curveBottom);
@@ -1231,14 +1344,14 @@
                 const t1 = (x - ribbonLeft) / ribbonWidth;
                 const t2 = (x + 1 - ribbonLeft) / ribbonWidth;
 
-                const tempValue1 = interpolateDataSmooth(weatherData.temperature, t1);
-                const tempValue2 = interpolateDataSmooth(weatherData.temperature, t2);
+                const tempValue1 = interpolateDataSmooth(weatherData.temperature, t1, true);
+                const tempValue2 = interpolateDataSmooth(weatherData.temperature, t2, true);
                 const dayValue = interpolateData(weatherData.daylight, t1);
                 const brightness = getDaylightBrightness(dayValue);
 
                 const color = getTempColor(tempValue1);
-                const y1 = curveBottom - (tempValue1 * curveHeight * 0.8);
-                const y2 = curveBottom - (tempValue2 * curveHeight * 0.8);
+                const y1 = curveBottom - (mapTempToDisplayRange(tempValue1) * curveHeight * 0.8);
+                const y2 = curveBottom - (mapTempToDisplayRange(tempValue2) * curveHeight * 0.8);
 
                 ctx.strokeStyle = colorToString(color, 0.8 * brightness);
                 ctx.beginPath();
@@ -1253,14 +1366,14 @@
                 const t1 = (x - ribbonLeft) / ribbonWidth;
                 const t2 = (x + 1 - ribbonLeft) / ribbonWidth;
 
-                const tempValue1 = interpolateDataSmooth(weatherData.temperature, t1);
-                const tempValue2 = interpolateDataSmooth(weatherData.temperature, t2);
+                const tempValue1 = interpolateDataSmooth(weatherData.temperature, t1, true);
+                const tempValue2 = interpolateDataSmooth(weatherData.temperature, t2, true);
                 const dayValue = interpolateData(weatherData.daylight, t1);
                 const brightness = getDaylightBrightness(dayValue);
 
                 const color = getTempColor(tempValue1);
-                const y1 = curveBottom - (tempValue1 * curveHeight * 0.8);
-                const y2 = curveBottom - (tempValue2 * curveHeight * 0.8);
+                const y1 = curveBottom - (mapTempToDisplayRange(tempValue1) * curveHeight * 0.8);
+                const y2 = curveBottom - (mapTempToDisplayRange(tempValue2) * curveHeight * 0.8);
 
                 ctx.strokeStyle = colorToString(color, 0.15 * brightness);
                 ctx.beginPath();
@@ -1270,60 +1383,36 @@
             }
 
             // Draw temperature reference line at noon
-            // Shows full range from -20°C to 45°C using the same color coding
-            // Fades out below -10°C and above 40°C
-            const minTempNorm = (-20 + 25) / 60; // -20°C = 0.083
-            const maxTempNorm = (45 + 25) / 60;  // 45°C = 1.167
-
+            // Shows the limited range (tempDisplayMin to tempDisplayMax) using the same color coding
             // Position reference line at noon (center of the ribbon, same vertical range as curve)
             const refLineX = (ribbonLeft + ribbonRight) / 2;
-            // Use the same vertical stretch as the temperature curve (curveHeight * 0.8)
-            const refLineTop = curveBottom - (maxTempNorm * curveHeight * 0.8);
-            const refLineBottom = curveBottom - (minTempNorm * curveHeight * 0.8);
+            // Reference line spans full display height (0 to 1 in mapped space)
+            const refLineTop = curveBottom - (1.0 * curveHeight * 0.8);  // Top of display range
+            const refLineBottom = curveBottom - (0.0 * curveHeight * 0.8);  // Bottom of display range
 
             // Draw the reference line pixel by pixel with temperature colors (very thin, dimmed)
-            // Fade out below -10°C and above 40°C
-            const fadeColdNorm = (-10 + 25) / 60; // -10°C = 0.25
-            const fadeHotNorm = (40 + 25) / 60;   // 40°C = 1.083
-
             for (let y = refLineTop; y < refLineBottom; y++) {
                 // Map y position to temperature (top = hot, bottom = cold)
                 const t = (y - refLineTop) / (refLineBottom - refLineTop);
-                const tempNorm = maxTempNorm - t * (maxTempNorm - minTempNorm);
+                // Map from display position (0-1) back to actual temperature
+                const tempNorm = tempDisplayMax - t * (tempDisplayMax - tempDisplayMin);
                 const color = getTempColor(tempNorm);
 
-                // Calculate alpha: full between -10°C and 40°C, fading at extremes
-                let alpha = 0.3;
-                if (tempNorm < fadeColdNorm) {
-                    // Fade from 0.3 at -10°C to 0 at -20°C
-                    alpha = 0.3 * (tempNorm - minTempNorm) / (fadeColdNorm - minTempNorm);
-                } else if (tempNorm > fadeHotNorm) {
-                    // Fade from 0.3 at 40°C to 0 at 50°C
-                    alpha = 0.3 * (maxTempNorm - tempNorm) / (maxTempNorm - fadeHotNorm);
-                }
-
-                ctx.fillStyle = colorToString(color, alpha);
+                ctx.fillStyle = colorToString(color, 0.3);
                 ctx.fillRect(refLineX, y, 0.5, 1.5);
             }
 
-            // Add tick marks at freezing (0°C) and 40°C
-            // 0°C normalized: (0 + 25) / 60 = 0.417
-            // 40°C normalized: (40 + 25) / 60 = 1.083 -> clamped to 1.0
-            const freezingNorm = (0 + 25) / 60;
-            const fortyNorm = Math.min(1, (40 + 25) / 60);
-
-            const freezingY = curveBottom - (freezingNorm * curveHeight * 0.8);
-            const fortyY = curveBottom - (fortyNorm * curveHeight * 0.8);
-
-            // Tick mark at freezing (0°C)
-            const freezingColor = getTempColor(freezingNorm);
-            ctx.fillStyle = colorToString(freezingColor, 0.25);
-            ctx.fillRect(refLineX - 2, freezingY, 4, 1);
-
-            // Tick mark at 40°C
-            const fortyColor = getTempColor(fortyNorm);
-            ctx.fillStyle = colorToString(fortyColor, 0.25);
-            ctx.fillRect(refLineX - 2, fortyY, 4, 1);
+            // Add tick marks at 0°C and 40°C if within display range
+            const tickTemps = [0, 40];
+            tickTemps.forEach(tempC => {
+                const tempNorm = (tempC + 25) / 60;
+                if (tempNorm >= tempDisplayMin && tempNorm <= tempDisplayMax) {
+                    const tickY = curveBottom - (mapTempToDisplayRange(tempNorm) * curveHeight * 0.8);
+                    const tickColor = getTempColor(tempNorm);
+                    ctx.fillStyle = colorToString(tickColor, 0.4);
+                    ctx.fillRect(refLineX - 2, tickY, 4, 1);
+                }
+            });
 
             // Draw current time marker (only for today's view)
             // Positioned above the sky ribbon
@@ -1384,19 +1473,14 @@
             const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
             const curveTop = curveBottom - curveHeight;
 
-            // Wind starts at 40°C line on temperature curve
-            // Temperature normalization: (temp + 25) / 60, so 40°C = (40 + 25) / 60 = 1.083 (clamped to 1)
-            const fortyDegreeNorm = Math.min(1, (40 + 25) / 60);
-            const windTopY = curveBottom - (fortyDegreeNorm * curveHeight * 0.8);
+            // Wind display area spans the full temperature curve height
+            // Use the same mapping as the temperature curve
+            const windTopY = curveBottom - (1.0 * curveHeight * 0.8);  // Top of curve
+            const windBottomY = curveBottom - (0.0 * curveHeight * 0.8);  // Bottom of curve
 
-            // Wind ends at 10°C line on temperature curve
-            // 10°C = (10 + 25) / 60 = 0.583
-            const tenDegreeNorm = (10 + 25) / 60;
-            const windBottomY = curveBottom - (tenDegreeNorm * curveHeight * 0.8);
-
-            // Ribbon horizontal bounds (same as temperature curve)
-            const ribbonLeft = Math.max(20, (window.innerWidth - 1200) / 2);
-            const ribbonRight = Math.min(window.innerWidth - 20, ribbonLeft + 1200);
+            // Get sky ribbon bounds relative to the canvas (which starts at 0)
+            const ribbonLeft = skyRect.left - wrapperRect.left;
+            const ribbonRight = skyRect.right - wrapperRect.left;
 
             return {
                 left: ribbonLeft,
@@ -1505,7 +1589,7 @@
                 // X is fixed at the streak's horizontal position
                 const screenX = bounds.left + streak.x;
                 // Y is at the temperature curve position - offset (above) - streak's baseY offset
-                const tempY = curveBottom - (tempValue * curveHeight * 0.8);
+                const tempY = curveBottom - (mapTempToDisplayRange(tempValue) * curveHeight * 0.8);
                 const screenY = tempY + verticalOffset - streak.baseY * 0.3; // baseY provides variation above
                 const endX = screenX + streakLength;
                 const endY = screenY + angle * streakLength;
@@ -1679,6 +1763,7 @@
                     timezone: suggestion.timezone
                 };
                 currentCity = cityKey;
+                currentDayOffset = 0; // Reset to today's view when changing location
 
                 // Restore label and refresh
                 restoreLabel(suggestion.name);
@@ -1812,9 +1897,9 @@
             // Calculate sky ribbon position relative to wrapper
             const skyBottomInWrapper = (skyRect.bottom - wrapperRect.top);
 
-            const maxRibbonWidth = 1200;
-            const ribbonWidth = Math.min(width - 40, maxRibbonWidth);
-            const ribbonLeft = (width - ribbonWidth) / 2;
+            // Get sky ribbon bounds relative to the wrapper
+            const ribbonLeft = skyRect.left - wrapperRect.left;
+            const ribbonWidth = skyRect.width;
 
             // Match the temperature curve positioning (shifted up 200px)
             const curveHeight = Math.min(height * 0.264, 144);
@@ -1831,12 +1916,11 @@
         window.addEventListener('resize', updateOverlayPosition);
 
         tempOverlay.addEventListener('mousemove', (e) => {
-            const width = window.innerWidth;
-
-            // Calculate bounds to match sky ribbon (max-width: 1200px, centered)
-            const maxRibbonWidth = 1200;
-            const ribbonWidth = Math.min(width - 40, maxRibbonWidth);
-            const ribbonLeft = (width - ribbonWidth) / 2;
+            // Get sky ribbon bounds in screen coordinates (for mouse position comparison)
+            const skyRibbonEl = document.getElementById('skyRibbon');
+            const skyRect = skyRibbonEl.getBoundingClientRect();
+            const ribbonLeft = skyRect.left;  // Screen coordinates for mouse comparison
+            const ribbonWidth = skyRect.width;
 
             const mouseX = e.clientX;
             const mouseY = e.clientY;
@@ -1845,7 +1929,7 @@
             const t = (mouseX - ribbonLeft) / ribbonWidth;
 
             // Get temperature value using the same interpolation as the curve
-            const tempNorm = interpolateDataSmooth(weatherData.temperature, t);
+            const tempNorm = interpolateDataSmooth(weatherData.temperature, t, true);
 
             // Convert normalized temperature back to Celsius
             // Normalization was: (temp + 25) / 60, so reverse: temp = norm * 60 - 25
@@ -1875,10 +1959,16 @@
             const mouseX = e.clientX;
             const mouseY = e.clientY;
 
-            // Hide tooltip when mouse is at or below the day selector (50vh)
-            // The sky content is above this point; below it is the page background / controls
-            const daySelectorY = window.innerHeight * 0.5;
-            if (mouseY >= daySelectorY - 20) {
+            // Calculate the sky portion height (excluding precipitation extension)
+            // Sky portion ends at skyFadeEndY which is fullBaseHeight + skyExtensionHeight
+            // But we display from cropAmount, so visible sky height is:
+            // skyFadeEndY - cropAmount = (240 + 36) - (240 * 0.55) = 276 - 132 = 144px
+            const visibleSkyHeight = 144; // Approximate visible sky height before precipitation area
+            const skyBottomY = rect.top + visibleSkyHeight;
+
+            // Hide tooltip when mouse is below the sky portion (in precipitation area)
+            // This prevents interference with the temperature curve overlay
+            if (mouseY > skyBottomY) {
                 skyTooltip.style.display = 'none';
                 return;
             }
