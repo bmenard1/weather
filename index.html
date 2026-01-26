@@ -2,8 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Clean Weather</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="application-name" content="Clean Weather">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Clean Weather">
+    <meta name="theme-color" content="#0d1117">
+    <meta name="description" content="Beautiful weather visualization with flowing ribbons">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Icons -->
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+
     <style>
         * {
             margin: 0;
@@ -366,10 +382,81 @@
             opacity: 0;
         }
 
+        /* Loading state */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .loading-overlay.visible {
+            opacity: 1;
+        }
+
+        .loading-skeleton {
+            position: absolute;
+            top: 10px;
+            left: 0;
+            right: 0;
+            height: 144px;
+            border-radius: 50px 50px 0 0;
+            background: linear-gradient(90deg,
+                rgba(30, 40, 60, 0.6) 0%,
+                rgba(50, 65, 90, 0.8) 50%,
+                rgba(30, 40, 60, 0.6) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s ease-in-out infinite;
+            overflow: hidden;
+        }
+
+        .loading-skeleton::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.03) 50%,
+                transparent 100%);
+        }
+
+        .loading-curve {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: linear-gradient(90deg,
+                rgba(80, 100, 140, 0.2) 0%,
+                rgba(100, 130, 170, 0.4) 50%,
+                rgba(80, 100, 140, 0.2) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s ease-in-out infinite;
+            animation-delay: 0.2s;
+            mask-image: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+            -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 100%);
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
     </style>
 </head>
 <body>
     <div class="weather-display-wrapper" id="weatherDisplayWrapper">
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-skeleton"></div>
+            <div class="loading-curve" id="loadingCurve"></div>
+        </div>
         <canvas id="tempCurveCanvas"></canvas>
         <canvas id="windCanvas"></canvas>
         <div id="tempCurveOverlay"></div>
@@ -393,7 +480,7 @@
             <button class="day-arrow" id="nextDay">&#8594;</button>
         </div>
     </div>
-    <div class="swipe-indicator" id="swipeIndicator">swipe left/right to change day</div>
+    <div class="swipe-indicator" id="swipeIndicator">tap left/right of sky to change day</div>
 
     <script>
         // City coordinates for weather API
@@ -410,26 +497,28 @@
 
         // Current state
         let currentCity = 'baltimore';
-        let currentDayOffset = 0; // 0 = today, 1 = tomorrow, etc.
-        const maxDayOffset = 14; // Today + 14 days ahead
+        let currentDayOffset = 0; // 0 = today, positive = future, negative = past
+        const maxFutureOffset = 14; // Today + 14 days ahead (API limit)
+        const historyBatchSize = 7; // Days to prefetch when going back in time
 
         // Current weather data
         let fullWeatherData = null;
         let weatherData = {};
 
-        // Fetch weather data from Open-Meteo API
-        async function fetchWeatherData(cityKey, dayOffset = 0) {
-            const city = cities[cityKey];
-
-            // Get the current date in the city's local timezone
+        // Helper to get date string for a given offset from today in city's timezone
+        function getDateForOffset(city, dayOffset) {
             const now = new Date();
-            const cityDateStr = now.toLocaleDateString('en-CA', { timeZone: city.timezone }); // 'en-CA' gives YYYY-MM-DD format
+            const cityDateStr = now.toLocaleDateString('en-CA', { timeZone: city.timezone });
             const cityToday = new Date(cityDateStr + 'T00:00:00');
-
-            // Get the target date (today + dayOffset in the city's timezone)
             const targetDate = new Date(cityToday);
             targetDate.setDate(targetDate.getDate() + dayOffset);
-            const dateStr = targetDate.toISOString().split('T')[0];
+            return targetDate.toISOString().split('T')[0];
+        }
+
+        // Fetch weather data from Open-Meteo API (forecast or historical)
+        async function fetchWeatherData(cityKey, dayOffset = 0) {
+            const city = cities[cityKey];
+            const dateStr = getDateForOffset(city, dayOffset);
 
             // Cache key uses the actual date to ensure correct data
             const cacheKey = `${cityKey}-${dateStr}`;
@@ -439,8 +528,19 @@
                 return weatherCache[cacheKey];
             }
 
-            // Open-Meteo API URL for hourly forecast (includes precipitation for forecast amounts)
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m,cloud_cover,rain,snowfall,precipitation,precipitation_probability,wind_speed_10m,wind_direction_10m,is_day&daily=sunrise,sunset&timezone=${encodeURIComponent(city.timezone)}&start_date=${dateStr}&end_date=${dateStr}`;
+            // Use historical API for past dates (more than 5 days ago), forecast API otherwise
+            // Historical API has ~5 day delay, so use forecast for recent past
+            const isHistorical = dayOffset < -5;
+            const baseUrl = isHistorical
+                ? 'https://archive-api.open-meteo.com/v1/archive'
+                : 'https://api.open-meteo.com/v1/forecast';
+
+            // Historical API doesn't have precipitation_probability
+            const hourlyParams = isHistorical
+                ? 'temperature_2m,cloud_cover,rain,snowfall,precipitation,wind_speed_10m,wind_direction_10m'
+                : 'temperature_2m,cloud_cover,rain,snowfall,precipitation,precipitation_probability,wind_speed_10m,wind_direction_10m,is_day';
+
+            const url = `${baseUrl}?latitude=${city.lat}&longitude=${city.lon}&hourly=${hourlyParams}&daily=sunrise,sunset&timezone=${encodeURIComponent(city.timezone)}&start_date=${dateStr}&end_date=${dateStr}`;
 
             try {
                 const response = await fetch(url);
@@ -522,7 +622,9 @@
                     precipProbability,
                     windSpeed,
                     windSpeedRaw,
-                    windDirection
+                    windDirection,
+                    sunriseHour,
+                    sunsetHour
                 };
 
                 // Cache the result
@@ -536,7 +638,8 @@
                     daylight: [0,0,0,0,0,0,0.1,0.4,0.7,0.9,1,1,1,1,1,1,0.9,0.5,0.1,0,0,0,0,0],
                     clouds: new Array(24).fill(0.3), rain: z, precipMm: z,
                     snow: null, snowCm: z, temperature: new Array(24).fill(0.5),
-                    precipProbability: z, windSpeed: z, windSpeedRaw: z, windDirection: z
+                    precipProbability: z, windSpeed: z, windSpeedRaw: z, windDirection: z,
+                    sunriseHour: 6, sunsetHour: 18
                 };
             }
         }
@@ -593,8 +696,8 @@
             let totalTemp = 0;
             let count = 0;
 
-            // Fetch temperature data for day 0 and day 14 only (for faster loading)
-            const sampleDays = [0, maxDayOffset];
+            // Fetch temperature data for today and max future day (for faster loading)
+            const sampleDays = [0, maxFutureOffset];
             for (const day of sampleDays) {
                 try {
                     const dayData = await fetchWeatherData(cityKey, day);
@@ -644,26 +747,44 @@
                 temperature: sliceWeatherData(fullWeatherData.temperature, startHour, endHour),
                 windSpeed: sliceWeatherData(fullWeatherData.windSpeed, startHour, endHour),
                 windSpeedRaw: sliceWeatherData(fullWeatherData.windSpeedRaw, startHour, endHour),
-                windDirection: sliceWeatherData(fullWeatherData.windDirection, startHour, endHour)
+                windDirection: sliceWeatherData(fullWeatherData.windDirection, startHour, endHour),
+                sunriseHour: fullWeatherData.sunriseHour,
+                sunsetHour: fullWeatherData.sunsetHour
             };
         }
 
         // Get day label for display
         function getDayLabel(dayOffset) {
             if (dayOffset === 0) return 'Today';
-            if (dayOffset === 1) return 'Tomorrow';
+            if (dayOffset === 1) {
+                const date = new Date();
+                date.setDate(date.getDate() + 1);
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+                return `Tomorrow ${dayName}`;
+            }
+            if (dayOffset === -1) {
+                const date = new Date();
+                date.setDate(date.getDate() - 1);
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+                return `Yesterday ${dayName}`;
+            }
 
             const date = new Date();
+            const currentYear = date.getFullYear();
             date.setDate(date.getDate() + dayOffset);
-            const options = { weekday: 'long', month: 'short', day: 'numeric' };
+            // Include year if not current year
+            const options = date.getFullYear() !== currentYear
+                ? { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }
+                : { weekday: 'long', month: 'short', day: 'numeric' };
             return date.toLocaleDateString('en-US', options);
         }
 
         // Update the day label display
         function updateDayLabel() {
             document.getElementById('dayLabel').textContent = getDayLabel(currentDayOffset);
-            document.getElementById('prevDay').disabled = currentDayOffset === 0;
-            document.getElementById('nextDay').disabled = currentDayOffset >= maxDayOffset;
+            // Past navigation is always enabled (unlimited history)
+            document.getElementById('prevDay').disabled = false;
+            document.getElementById('nextDay').disabled = currentDayOffset >= maxFutureOffset;
             // Also update city label
             const cityLabelEl = document.getElementById('cityLabel');
             if (cityLabelEl && cities[currentCity]) {
@@ -671,16 +792,123 @@
             }
         }
 
+        // Loading state management
+        let isLoading = false;
+
+        function showLoading() {
+            if (isLoading) return;
+            isLoading = true;
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingCurve = document.getElementById('loadingCurve');
+
+            // Position the loading curve to match temperature curve area
+            const wrapper = document.getElementById('weatherDisplayWrapper');
+            const skyRibbonEl = document.getElementById('skyRibbon');
+            if (skyRibbonEl && wrapper) {
+                const wrapperRect = wrapper.getBoundingClientRect();
+                const skyRect = skyRibbonEl.getBoundingClientRect();
+                const skyBottomInWrapper = skyRect.bottom - wrapperRect.top;
+                loadingCurve.style.top = `${skyBottomInWrapper - 40}px`;
+            } else {
+                loadingCurve.style.top = '180px';
+            }
+
+            overlay.classList.add('visible');
+        }
+
+        function hideLoading() {
+            isLoading = false;
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.remove('visible');
+        }
+
+        // Check if weather data is already cached for a given city and day
+        function isDataCached(cityKey, dayOffset) {
+            const city = cities[cityKey];
+            const dateStr = getDateForOffset(city, dayOffset);
+            const cacheKey = `${cityKey}-${dateStr}`;
+            return weatherCache[cacheKey] && weatherCache[cacheKey].precipMm && weatherCache[cacheKey].snowCm;
+        }
+
+        // Prefetch weather data in the background
+        let prefetchInProgress = false;
+        let prefetchedCity = null;
+        let prefetchedPastBoundary = 0; // Track how far back we've prefetched
+
+        // Prefetch future days (1 to maxFutureOffset)
+        async function prefetchFutureDays(cityKey) {
+            const batchSize = 3;
+            for (let i = 1; i <= maxFutureOffset; i += batchSize) {
+                if (prefetchedCity !== cityKey) break;
+                const batch = [];
+                for (let j = i; j < Math.min(i + batchSize, maxFutureOffset + 1); j++) {
+                    if (!isDataCached(cityKey, j)) {
+                        batch.push(fetchWeatherData(cityKey, j));
+                    }
+                }
+                if (batch.length > 0) {
+                    await Promise.all(batch);
+                }
+            }
+        }
+
+        // Prefetch past days in batches when user navigates backward
+        async function prefetchPastDays(cityKey, fromOffset) {
+            // Prefetch a batch of days before the current position
+            const endOffset = fromOffset;
+            const startOffset = fromOffset - historyBatchSize;
+
+            const batch = [];
+            for (let j = startOffset; j < endOffset; j++) {
+                if (!isDataCached(cityKey, j)) {
+                    batch.push(fetchWeatherData(cityKey, j));
+                }
+            }
+            if (batch.length > 0) {
+                await Promise.all(batch);
+            }
+
+            // Update boundary tracker
+            if (startOffset < prefetchedPastBoundary) {
+                prefetchedPastBoundary = startOffset;
+            }
+        }
+
+        // Initial prefetch for future days
+        async function prefetchRemainingDays(cityKey) {
+            if (prefetchInProgress && prefetchedCity === cityKey) return;
+            prefetchInProgress = true;
+            prefetchedCity = cityKey;
+            prefetchedPastBoundary = 0; // Reset past boundary for new city
+
+            await prefetchFutureDays(cityKey);
+
+            if (prefetchedCity === cityKey) {
+                prefetchInProgress = false;
+            }
+        }
+
         // Refresh the current view
         async function refreshView() {
-            // Recalculate temperature display range when city changes
-            if (tempRangeCity !== currentCity) {
-                await calculateLocationTempRange(currentCity);
-                tempRangeCity = currentCity;
+            // Only show loading if data isn't already cached
+            const needsLoading = !isDataCached(currentCity, currentDayOffset) || tempRangeCity !== currentCity;
+            if (needsLoading) {
+                showLoading();
             }
-            await updateWeatherData(currentCity, currentDayOffset);
-            updateDayLabel();
-            draw();
+            try {
+                // Recalculate temperature display range when city changes
+                if (tempRangeCity !== currentCity) {
+                    await calculateLocationTempRange(currentCity);
+                    tempRangeCity = currentCity;
+                }
+                await updateWeatherData(currentCity, currentDayOffset);
+                updateDayLabel();
+                draw();
+            } finally {
+                if (needsLoading) {
+                    hideLoading();
+                }
+            }
         }
 
         // Smooth interpolation function
@@ -874,8 +1102,10 @@
                 const skyColors = getSkyColor(dayValue, cloudValue);
 
                 // Calculate sky color blended with grey based on cloud coverage
+                // Use cosine interpolation for smooth brightness transitions
                 const greyColor = { r: 180, g: 185, b: 195 };
-                const skyColor = lerpColor(skyColors.bottom, greyColor, cloudValue);
+                const cloudBlend = 0.5 * (1 - Math.cos(cloudValue * Math.PI));
+                const skyColor = lerpColor(skyColors.bottom, greyColor, cloudBlend);
 
                 // Create gradient from cloud bottom down, fading to transparent with cosine decay
                 const gradient = ctx.createLinearGradient(x, cloudBottomY, x, skyFadeEndY);
@@ -898,10 +1128,13 @@
                 const rainValue = interpolateData(weatherData.rain, t);
                 const dayValue = interpolateData(weatherData.daylight, t);
 
+                // Use cosine interpolation for smooth cloud coverage transitions
+                const cloudSmooth = 0.5 * (1 - Math.cos(cloudValue * Math.PI));
+
                 // Calculate cloud color based on time of day using smooth transitions
                 // Night clouds (dark), twilight clouds (medium), day clouds (bright)
-                const nightGray = 60 - cloudValue * 20 - rainValue * 20;
-                const dayGray = 230 - cloudValue * 30 - rainValue * 40;
+                const nightGray = 60 - cloudSmooth * 20 - rainValue * 20;
+                const dayGray = 230 - cloudSmooth * 30 - rainValue * 40;
                 // Smooth transition using smoothstep for continuous blending
                 const dayBlend = smoothstep(0.15, 0.55, dayValue);
                 const baseGray = nightGray + (dayGray - nightGray) * dayBlend;
@@ -918,8 +1151,8 @@
                 b = Math.max(0, baseGray - 10 * tintStrength);
 
                 // Fill the top area with cloud color (only visible when there are clouds)
-                // No minimum alpha - if cloudValue is 0, the top is fully transparent
-                const alpha = cloudValue;
+                // Use cosine-smoothed alpha for gradual transitions
+                const alpha = cloudSmooth;
 
                 // Skip drawing if no clouds (fully transparent)
                 if (alpha < 0.01) continue;
@@ -938,10 +1171,10 @@
                 for (let i = 0; i < 6; i++) {
                     const puffX = x + noise(x * puffFreq, i) * 15;
                     const puffY = cloudBottomY - 10 + noise(x, i) * 25;
-                    const puffSize = (12 + noise(x, i * 2) * 20) * cloudValue;
+                    const puffSize = (12 + noise(x, i * 2) * 20) * cloudSmooth;
 
                     if (puffSize > 3) {
-                        const puffAlpha = Math.min(0.9, cloudValue * 0.8);
+                        const puffAlpha = Math.min(0.9, cloudSmooth * 0.8);
                         const puffGradient = ctx.createRadialGradient(puffX, puffY, 0, puffX, puffY, puffSize);
                         puffGradient.addColorStop(0, `rgba(${r + 10}, ${g + 10}, ${b + 15}, ${puffAlpha})`);
                         puffGradient.addColorStop(0.5, `rgba(${r}, ${g + 3}, ${b + 8}, ${puffAlpha * 0.7})`);
@@ -966,18 +1199,11 @@
 
                 if (nightness > 0.01) {
                     // Dark blue-black overlay for night sky
-                    // When cloud cover >= 50%, darken the sky more (heavy clouds block light pollution)
-                    // When cloud cover < 50%, slightly lighter (some ambient light)
-                    let darkness;
-                    if (cloudValue >= 0.5) {
-                        // Heavy clouds at night - darker sky
-                        const heavyCloudDarkening = (cloudValue - 0.5) * 0.4; // Extra darkening for heavy clouds
-                        darkness = nightness * (0.75 + heavyCloudDarkening);
-                    } else {
-                        // Light/no clouds at night - slightly lighter
-                        const cloudLightening = cloudValue * 0.2;
-                        darkness = nightness * (0.7 - cloudLightening);
-                    }
+                    // Use cosine interpolation for smooth cloud-based darkness transitions
+                    // More clouds = darker (blocks light pollution), fewer clouds = slightly lighter
+                    const cloudSmooth = 0.5 * (1 - Math.cos(cloudValue * Math.PI));
+                    // Darkness ranges from 0.6 (clear) to 0.95 (overcast) smoothly
+                    const darkness = nightness * (0.6 + cloudSmooth * 0.35);
 
                     // Create gradient from top to skyFadeEndY (sky portion only, not precipitation area)
                     const gradient = ctx.createLinearGradient(x, cropAmount, x, skyFadeEndY);
@@ -1301,32 +1527,40 @@
                     minute: '2-digit'
                 });
                 const [hours, minutes] = timeStr.split(':').map(Number);
-                const currentTimeT = (hours + minutes / 60) / 24;
+                const currentHour = hours + minutes / 60;
 
-                // Calculate X position within the ribbon bounds
-                const markerX = ribbonLeft + currentTimeT * ribbonWidth;
+                // Map current time to position within the display range (not full 24h)
+                // displayStartHour and displayEndHour define the visible range
+                const displayHours = displayEndHour - displayStartHour;
+                const currentTimeT = (currentHour - displayStartHour) / displayHours;
 
-                // Get the actual position of the sky ribbon element relative to wrapper
-                const skyTopInWrapper = (skyRect.top - wrapperRect.top) - 2;
+                // Only draw marker if current time is within the displayed range
+                if (currentTimeT >= 0 && currentTimeT <= 1) {
+                    // Calculate X position within the ribbon bounds
+                    const markerX = ribbonLeft + currentTimeT * ribbonWidth;
 
-                // Draw a refined triangle marker with soft glow
-                // Outer glow
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-                ctx.beginPath();
-                ctx.moveTo(markerX, skyTopInWrapper + 1);
-                ctx.lineTo(markerX - 7, skyTopInWrapper - 10);
-                ctx.lineTo(markerX + 7, skyTopInWrapper - 10);
-                ctx.closePath();
-                ctx.fill();
+                    // Get the actual position of the sky ribbon element relative to wrapper
+                    const skyTopInWrapper = (skyRect.top - wrapperRect.top) - 2;
 
-                // Inner triangle
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                ctx.beginPath();
-                ctx.moveTo(markerX, skyTopInWrapper);
-                ctx.lineTo(markerX - 4, skyTopInWrapper - 7);
-                ctx.lineTo(markerX + 4, skyTopInWrapper - 7);
-                ctx.closePath();
-                ctx.fill();
+                    // Draw a refined triangle marker with soft glow
+                    // Outer glow
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                    ctx.beginPath();
+                    ctx.moveTo(markerX, skyTopInWrapper + 1);
+                    ctx.lineTo(markerX - 7, skyTopInWrapper - 10);
+                    ctx.lineTo(markerX + 7, skyTopInWrapper - 10);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // Inner triangle
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                    ctx.beginPath();
+                    ctx.moveTo(markerX, skyTopInWrapper);
+                    ctx.lineTo(markerX - 4, skyTopInWrapper - 7);
+                    ctx.lineTo(markerX + 4, skyTopInWrapper - 7);
+                    ctx.closePath();
+                    ctx.fill();
+                }
             }
         }
 
@@ -1652,6 +1886,8 @@
                 // Restore label and refresh
                 restoreLabel(suggestion.name);
                 await refreshView();
+                // Prefetch remaining days for new city
+                prefetchRemainingDays(cityKey);
             }
 
             function restoreLabel(name) {
@@ -1733,14 +1969,16 @@
 
         // Handle day navigation
         document.getElementById('prevDay').addEventListener('click', async () => {
-            if (currentDayOffset > 0) {
-                currentDayOffset--;
-                await refreshView();
+            currentDayOffset--;
+            await refreshView();
+            // Prefetch more past days if approaching the boundary
+            if (currentDayOffset <= prefetchedPastBoundary + 3) {
+                prefetchPastDays(currentCity, prefetchedPastBoundary);
             }
         });
 
         document.getElementById('nextDay').addEventListener('click', async () => {
-            if (currentDayOffset < maxDayOffset) {
+            if (currentDayOffset < maxFutureOffset) {
                 currentDayOffset++;
                 await refreshView();
             }
@@ -1756,10 +1994,14 @@
 
         // Handle keyboard navigation for days
         document.addEventListener('keydown', async (e) => {
-            if (e.key === 'ArrowLeft' && currentDayOffset > 0) {
+            if (e.key === 'ArrowLeft') {
                 currentDayOffset--;
                 await refreshView();
-            } else if (e.key === 'ArrowRight' && currentDayOffset < maxDayOffset) {
+                // Prefetch more past days if approaching the boundary
+                if (currentDayOffset <= prefetchedPastBoundary + 3) {
+                    prefetchPastDays(currentCity, prefetchedPastBoundary);
+                }
+            } else if (e.key === 'ArrowRight' && currentDayOffset < maxFutureOffset) {
                 currentDayOffset++;
                 await refreshView();
             }
@@ -1933,6 +2175,27 @@
                 weatherInfo += ` | <span style="color: rgb(100, 180, 235)">${precipMm.toFixed(1)}mm rain</span>`;
             }
 
+            // Add sunrise/sunset info if within 1 hour
+            const currentHour = displayStartHour + t * (displayEndHour - displayStartHour);
+            const sunriseHour = weatherData.sunriseHour;
+            const sunsetHour = weatherData.sunsetHour;
+
+            if (Math.abs(currentHour - sunriseHour) <= 1) {
+                // Get sky color at sunrise time
+                const sunriseDayValue = interpolateData(weatherData.daylight, (sunriseHour - displayStartHour) / (displayEndHour - displayStartHour));
+                const skyColor = getSkyColor(sunriseDayValue, 0);
+                const sunriseMinutes = Math.round((sunriseHour % 1) * 60);
+                const sunriseTimeStr = `${Math.floor(sunriseHour)}h${sunriseMinutes.toString().padStart(2, '0')}`;
+                weatherInfo += ` | <span style="color: rgb(${skyColor.bottom.r}, ${skyColor.bottom.g}, ${skyColor.bottom.b})">sunrise ${sunriseTimeStr}</span>`;
+            } else if (Math.abs(currentHour - sunsetHour) <= 1) {
+                // Get sky color at sunset time
+                const sunsetDayValue = interpolateData(weatherData.daylight, (sunsetHour - displayStartHour) / (displayEndHour - displayStartHour));
+                const skyColor = getSkyColor(sunsetDayValue, 0);
+                const sunsetMinutes = Math.round((sunsetHour % 1) * 60);
+                const sunsetTimeStr = `${Math.floor(sunsetHour)}h${sunsetMinutes.toString().padStart(2, '0')}`;
+                weatherInfo += ` | <span style="color: rgb(${skyColor.bottom.r}, ${skyColor.bottom.g}, ${skyColor.bottom.b})">sunset ${sunsetTimeStr}</span>`;
+            }
+
             // Display the tooltip with hour on first line, weather info on second
             skyTooltip.innerHTML = `<div class="tooltip-hour">${hourStr}</div><div class="tooltip-value">${weatherInfo}</div>`;
             skyTooltip.style.left = `${mouseX}px`;
@@ -1944,45 +2207,72 @@
             skyTooltip.style.display = 'none';
         });
 
-        // Touch device detection and swipe gestures
+        // Touch device detection and tap-to-navigate
         const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
         if (isTouchDevice) {
             document.body.classList.add('touch-device');
 
-            // Show swipe indicator briefly, then hide it
+            // Show tap indicator briefly, then hide it
             const swipeIndicator = document.getElementById('swipeIndicator');
             setTimeout(() => {
                 swipeIndicator.classList.add('hidden');
             }, 3000);
 
-            let touchStartX = 0, touchStartY = 0, isSwiping = false;
-            const minSwipeDistance = 50, maxVerticalDistance = 100;
+            // Tap left/right side of sky ribbon to navigate days
+            const skyRibbonTouch = document.getElementById('skyRibbon');
+            let touchStartX = 0, touchStartY = 0;
 
-            document.addEventListener('touchstart', (e) => {
+            skyRibbonTouch.addEventListener('touchstart', (e) => {
                 touchStartX = e.changedTouches[0].screenX;
                 touchStartY = e.changedTouches[0].screenY;
-                isSwiping = true;
             }, { passive: true });
 
-            document.addEventListener('touchend', async (e) => {
-                if (!isSwiping) return;
-                isSwiping = false;
-                const deltaX = e.changedTouches[0].screenX - touchStartX;
-                const deltaY = Math.abs(e.changedTouches[0].screenY - touchStartY);
-                if (Math.abs(deltaX) >= minSwipeDistance && deltaY < maxVerticalDistance) {
-                    if (deltaX < 0 && currentDayOffset < maxDayOffset) { currentDayOffset++; await refreshView(); }
-                    else if (deltaX > 0 && currentDayOffset > 0) { currentDayOffset--; await refreshView(); }
+            skyRibbonTouch.addEventListener('touchend', async (e) => {
+                const touchEndX = e.changedTouches[0].screenX;
+                const touchEndY = e.changedTouches[0].screenY;
+                const deltaX = Math.abs(touchEndX - touchStartX);
+                const deltaY = Math.abs(touchEndY - touchStartY);
+
+                // Only trigger on tap (minimal movement), not drag/scroll
+                if (deltaX > 20 || deltaY > 20) return;
+
+                const rect = skyRibbonTouch.getBoundingClientRect();
+                const tapX = touchEndX - rect.left;
+                const ribbonWidth = rect.width;
+
+                // Tap on left third = previous day, right third = next day
+                if (tapX < ribbonWidth * 0.33) {
+                    currentDayOffset--;
+                    await refreshView();
+                    // Prefetch more past days if approaching the boundary
+                    if (currentDayOffset <= prefetchedPastBoundary + 3) {
+                        prefetchPastDays(currentCity, prefetchedPastBoundary);
+                    }
+                } else if (tapX > ribbonWidth * 0.67 && currentDayOffset < maxFutureOffset) {
+                    currentDayOffset++;
+                    await refreshView();
                 }
             }, { passive: true });
         } else {
-            // Hide swipe indicator on non-touch devices
+            // Hide tap indicator on non-touch devices
             const swipeIndicator = document.getElementById('swipeIndicator');
             swipeIndicator.style.display = 'none';
         }
 
-        // Start - initialize with current city and day
-        refreshView();
+        // Register service worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(err => {
+                console.log('Service worker registration failed:', err);
+            });
+        }
+
+        // Start - show loading immediately and initialize
+        document.getElementById('loadingOverlay').classList.add('visible');
+        refreshView().then(() => {
+            // After initial view is loaded, prefetch remaining days in background
+            prefetchRemainingDays(currentCity);
+        });
     </script>
 </body>
 </html>
