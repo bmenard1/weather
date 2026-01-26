@@ -13,7 +13,7 @@
 
         body {
             min-height: 100vh;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            background: linear-gradient(160deg, #0d1117 0%, #161b22 40%, #1a2332 70%, #0f1a2e 100%);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             flex-direction: column;
@@ -36,21 +36,14 @@
             padding-bottom: 50px;
         }
 
-        #tempCurveCanvas {
+        #tempCurveCanvas, #windCanvas {
             position: absolute;
             top: 0;
             left: 0;
             pointer-events: none;
-            z-index: 0;
         }
-
-        #windCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            pointer-events: none;
-            z-index: 1;
-        }
+        #tempCurveCanvas { z-index: 0; }
+        #windCanvas { z-index: 1; }
 
         #tempCurveOverlay {
             position: absolute;
@@ -108,40 +101,6 @@
             display: block;
         }
 
-        .weather-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            position: fixed;
-            top: 56vh;
-            left: 0;
-            right: 0;
-            z-index: 2;
-        }
-
-        .weather-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 25px;
-            background: rgba(255, 255, 255, 0.1);
-            color: #a0a8b8;
-            font-size: 0.8rem;
-            letter-spacing: 1px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .weather-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            color: #e8e8e8;
-        }
-
-        .weather-btn.active {
-            background: rgba(255, 255, 255, 0.25);
-            color: #fff;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-
         .day-selector {
             display: flex;
             justify-content: center;
@@ -161,21 +120,23 @@
             width: 320px;
         }
 
-        .city-label {
-            color: #e8e8e8;
-            font-size: 0.9rem;
-            letter-spacing: 1px;
+        .city-label, .day-label {
             cursor: pointer;
             padding: 6px 12px;
             border-radius: 15px;
-            transition: all 0.3s ease;
-            min-width: 120px;
+            transition: all 0.25s ease;
             text-align: center;
+            letter-spacing: 0.5px;
         }
-
-        .city-label:hover {
-            background: rgba(255, 255, 255, 0.1);
+        .city-label:hover, .day-label:hover {
+            background: rgba(255, 255, 255, 0.08);
         }
+        .city-label {
+            color: rgba(200, 210, 230, 0.85);
+            font-size: 0.85rem;
+            min-width: 120px;
+        }
+        .city-label:hover { color: rgba(235, 240, 250, 0.95); }
 
         .city-input {
             background: rgba(255, 255, 255, 0.15);
@@ -242,55 +203,62 @@
         .day-arrow {
             width: 36px;
             height: 36px;
-            border: none;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            color: #a0a8b8;
+            background: rgba(255, 255, 255, 0.06);
+            color: rgba(180, 190, 210, 0.8);
             font-size: 1.2rem;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.25s ease;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .day-arrow:hover:not(:disabled) {
-            background: rgba(255, 255, 255, 0.2);
-            color: #e8e8e8;
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #e8eaef;
         }
 
         .day-arrow:disabled {
-            opacity: 0.3;
+            opacity: 0.25;
             cursor: not-allowed;
         }
 
         .day-label {
-            color: #e8e8e8;
+            color: rgba(235, 238, 245, 0.9);
             font-size: 0.9rem;
-            letter-spacing: 1px;
             width: 180px;
-            text-align: center;
-            cursor: pointer;
-            padding: 6px 12px;
-            border-radius: 15px;
-            transition: all 0.3s ease;
         }
-
-        .day-label:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
+        .day-label:hover { color: #fff; }
 
         .temp-tooltip, .sky-tooltip {
-            background: rgba(0, 0, 0, 0.75);
+            background: rgba(8, 12, 20, 0.85);
             color: #fff;
-            padding: 4px 8px;
-            border-radius: 4px;
+            padding: 6px 12px;
+            border-radius: 6px;
             font-size: 0.8rem;
             pointer-events: none;
             z-index: 100;
             display: none;
             transform: translate(-50%, -100%);
             margin-top: -10px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .tooltip-hour {
+            font-size: 0.85rem;
+            color: rgba(200, 210, 230, 0.8);
+            margin-bottom: 2px;
+        }
+
+        .tooltip-value {
+            font-size: 0.85rem;
         }
 
         /* Responsive styles for mobile */
@@ -386,9 +354,9 @@
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            color: rgba(255, 255, 255, 0.4);
-            font-size: 0.75rem;
-            letter-spacing: 1px;
+            color: rgba(180, 195, 220, 0.35);
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
             pointer-events: none;
             opacity: 1;
             transition: opacity 0.5s ease;
@@ -563,19 +531,12 @@
 
             } catch (error) {
                 console.error('Failed to fetch weather data:', error);
-                // Return fallback data
+                const z = new Array(24).fill(0);
                 return {
-                    daylight: [0, 0, 0, 0, 0, 0, 0.1, 0.4, 0.7, 0.9, 1, 1, 1, 1, 1, 1, 0.9, 0.5, 0.1, 0, 0, 0, 0, 0],
-                    clouds: [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3],
-                    rain: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                    precipMm: new Array(24).fill(0),
-                    snow: null,
-                    snowCm: new Array(24).fill(0),
-                    temperature: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5],
-                    precipProbability: new Array(24).fill(0),
-                    windSpeed: new Array(24).fill(0),
-                    windSpeedRaw: new Array(24).fill(0),
-                    windDirection: new Array(24).fill(0)
+                    daylight: [0,0,0,0,0,0,0.1,0.4,0.7,0.9,1,1,1,1,1,1,0.9,0.5,0.1,0,0,0,0,0],
+                    clouds: new Array(24).fill(0.3), rain: z, precipMm: z,
+                    snow: null, snowCm: z, temperature: new Array(24).fill(0.5),
+                    precipProbability: z, windSpeed: z, windSpeedRaw: z, windDirection: z
                 };
             }
         }
@@ -846,63 +807,23 @@
             return maxSnow;
         }
 
-        // Get sky color based on daylight value
-        // Uses smoothstep for continuous transitions without visible lines
-        // When cloudValue is provided and low (<=5%) at night, sky is black
+        // Sky colors: [top, bottom] for each phase
+        const skyPalette = {
+            black: {r:3,g:3,b:8}, night: [{r:12,g:18,b:38},{r:20,g:30,b:55}],
+            twilight: [{r:55,g:45,b:85},{r:85,g:65,b:105}], dawn: [{r:255,g:130,b:90},{r:255,g:175,b:130}],
+            day: [{r:85,g:170,b:235},{r:150,g:205,b:250}], noon: [{r:120,g:195,b:255},{r:170,g:220,b:255}]
+        };
+
         function getSkyColor(dayValue, cloudValue = 1) {
-            // Black sky for clear nights
-            const blackColor = { r: 5, g: 5, b: 10 };
-
-            // Night colors (used when cloudy)
-            const nightColorTop = { r: 15, g: 20, b: 45 };
-            const nightColorBottom = { r: 25, g: 35, b: 65 };
-
-            // Twilight/dawn colors
-            const twilightColorTop = { r: 60, g: 50, b: 90 };
-            const twilightColorBottom = { r: 90, g: 70, b: 110 };
-
-            // Dawn/dusk colors (orange/pink/purple)
-            const dawnColorTop = { r: 255, g: 140, b: 100 };
-            const dawnColorBottom = { r: 255, g: 180, b: 140 };
-
-            // Day colors
-            const dayColorTop = { r: 100, g: 180, b: 235 };
-            const dayColorBottom = { r: 160, g: 210, b: 250 };
-
-            // Noon colors (bright)
-            const noonColorTop = { r: 135, g: 206, b: 250 };
-            const noonColorBottom = { r: 180, g: 225, b: 255 };
-
-            // Use smoothstep for each transition to avoid visible lines
-            // Overlapping ranges create smooth blending between color stages
-            const nightToTwilight = smoothstep(0.0, 0.2, dayValue);
-            const twilightToDawn = smoothstep(0.1, 0.4, dayValue);
-            const dawnToDay = smoothstep(0.3, 0.65, dayValue);
-            const dayToNoon = smoothstep(0.55, 0.9, dayValue);
-
-            // Blend through each stage smoothly
-            let top = lerpColor(nightColorTop, twilightColorTop, nightToTwilight);
-            let bottom = lerpColor(nightColorBottom, twilightColorBottom, nightToTwilight);
-
-            top = lerpColor(top, dawnColorTop, twilightToDawn);
-            bottom = lerpColor(bottom, dawnColorBottom, twilightToDawn);
-
-            top = lerpColor(top, dayColorTop, dawnToDay);
-            bottom = lerpColor(bottom, dayColorBottom, dawnToDay);
-
-            top = lerpColor(top, noonColorTop, dayToNoon);
-            bottom = lerpColor(bottom, noonColorBottom, dayToNoon);
-
-            // At night with clear skies (clouds <= 5%), fade to black
-            // Use smoothstep for smooth transition without discontinuity
-            const nightness = 1 - smoothstep(0.0, 0.35, dayValue); // Smooth fade: 1 at dayValue=0, 0 at dayValue>=0.35
-            const clearness = 1 - smoothstep(0.0, 0.08, cloudValue); // Smooth fade based on cloud cover
-            const blackBlend = nightness * clearness;
-            if (blackBlend > 0) {
-                top = lerpColor(top, blackColor, blackBlend);
-                bottom = lerpColor(bottom, blackColor, blackBlend);
-            }
-
+            const {black, night, twilight, dawn, day, noon} = skyPalette;
+            const s = (a,b,v) => smoothstep(a,b,dayValue);
+            let top = lerpColor(night[0], twilight[0], s(0,0.2));
+            let bottom = lerpColor(night[1], twilight[1], s(0,0.2));
+            top = lerpColor(top, dawn[0], s(0.1,0.4)); bottom = lerpColor(bottom, dawn[1], s(0.1,0.4));
+            top = lerpColor(top, day[0], s(0.3,0.65)); bottom = lerpColor(bottom, day[1], s(0.3,0.65));
+            top = lerpColor(top, noon[0], s(0.55,0.9)); bottom = lerpColor(bottom, noon[1], s(0.55,0.9));
+            const blackBlend = (1 - smoothstep(0,0.35,dayValue)) * (1 - smoothstep(0,0.08,cloudValue));
+            if (blackBlend > 0) { top = lerpColor(top, black, blackBlend); bottom = lerpColor(bottom, black, blackBlend); }
             return { top, bottom };
         }
 
@@ -1070,41 +991,51 @@
                 }
             }
 
-            // Draw stars at night - limited to sky portion (skyFadeEndY)
-            for (let x = 0; x < width; x++) {
-                const t = x / width;
+            // Draw stars at night - pre-generated random positions for natural distribution
+            const starCount = 400;
+            const skyAreaHeight = skyFadeEndY - cropAmount;
+            // Star color palette: mostly white, some with subtle tints
+            const starColors = [
+                {r:255,g:255,b:255}, {r:255,g:255,b:255}, {r:255,g:255,b:255}, {r:255,g:255,b:255}, // white (common)
+                {r:255,g:240,b:220}, {r:255,g:235,b:210}, // warm white/yellow
+                {r:220,g:235,b:255}, {r:200,g:220,b:255}, // cool white/blue
+                {r:255,g:220,b:210}, {r:255,g:200,b:180}  // warm/reddish
+            ];
+            for (let i = 0; i < starCount; i++) {
+                const starX = noise(i * 7.3, 0) * width;
+                const starY = cropAmount + noise(i * 13.7, 1) * skyAreaHeight;
+
+                const t = starX / width;
                 const dayValue = interpolateData(weatherData.daylight, t);
                 const cloudValue = interpolateData(weatherData.clouds, t);
-
-                // Smooth star visibility using smoothstep - stars fade out as dayValue increases
                 const starVisibility = 1 - smoothstep(0.0, 0.35, dayValue);
-                // Smooth cloud fade - stars fade as clouds increase
                 const cloudFade = 1 - smoothstep(0.3, 0.7, cloudValue);
                 const combinedVisibility = starVisibility * cloudFade;
 
                 if (combinedVisibility > 0.01) {
-                    const starChance = combinedVisibility * 0.045;
-                    // Stars limited to sky portion only (skyFadeEndY), not precipitation area
-                    for (let y = cropAmount; y < skyFadeEndY; y += 8) {
-                        if (noise(x, y) < starChance) {
-                            ctx.fillStyle = `rgba(255, 255, 255, ${combinedVisibility * 0.6 * noise(x + 100, y)})`;
-                            ctx.beginPath();
-                            ctx.arc(x, y + noise(x, y) * 8, 1, 0, Math.PI * 2);
-                            ctx.fill();
-                        }
-                    }
+                    const size = 0.4 + noise(i, 2) * 1.0;
+                    const brightness = 0.3 + noise(i, 3) * 0.7;
+                    const color = starColors[Math.floor(noise(i, 4) * starColors.length)];
+                    ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${combinedVisibility * brightness})`;
+                    ctx.beginPath();
+                    ctx.arc(starX, starY, size, 0, Math.PI * 2);
+                    ctx.fill();
                 }
             }
 
             // Draw rain falling from clouds (only where there's rain)
-            // Rain extends over page background - full opacity for visibility
+            // Rain extends over page background - realistic streaks with depth layers
             if (maxRain > 0) {
-                // Draw rain drops - solid white/light blue
+                // Multiple depth layers for parallax effect - closer drops are larger and more opaque
                 const dropLayers = [
-                    { count: 400, size: 2 },
-                    { count: 300, size: 2.5 },
-                    { count: 200, size: 3 }
+                    { count: 500, size: 0.8, opacity: 0.25, lengthMult: 0.7 },   // Far background
+                    { count: 400, size: 1.2, opacity: 0.4, lengthMult: 0.85 },   // Mid background
+                    { count: 300, size: 1.8, opacity: 0.55, lengthMult: 1.0 },   // Mid foreground
+                    { count: 200, size: 2.5, opacity: 0.7, lengthMult: 1.15 }    // Close foreground
                 ];
+
+                // Slight angle for wind-driven rain (about 10-12 degrees from vertical)
+                const rainAngle = 0.18; // x offset per y unit
 
                 dropLayers.forEach((layer, layerIdx) => {
                     for (let i = 0; i < layer.count; i++) {
@@ -1117,23 +1048,37 @@
                         if (snowValue > 0.05) continue;
 
                         if (rainValue > 0.02 && noise(i * 2, layerIdx) < rainValue) {
-                            const x = baseX + noise(i, layerIdx + 10) * 15 - 7.5;
+                            // Slight horizontal spread for natural variation
+                            const x = baseX + noise(i, layerIdx + 10) * 20 - 10;
 
-                            // Rain falls from bottom of clouds down through extended precipitation area
-                            const rainStartY = cropAmount + 30; // Start 30px below visible top
+                            // Rain falls from clouds down through extended precipitation area
+                            const rainStartY = cropAmount + 20;
                             const rainEndY = skyHeight + rainValue * precipExtensionHeight;
                             const y = rainStartY + noise(i, layerIdx + 20) * (rainEndY - rainStartY);
-                            const dropLength = layer.size + rainValue * 15;
 
-                            // Only draw if drop length is substantial (avoid near-horizontal lines)
-                            if (dropLength > 3) {
-                                // Solid rain drops - light blue, nearly vertical
-                                ctx.strokeStyle = `rgb(140, 180, 255)`;
-                                ctx.lineWidth = layer.size * 0.5;
+                            // Drop length varies with rain intensity and layer depth
+                            const baseLength = 8 + rainValue * 18;
+                            const dropLength = baseLength * layer.lengthMult;
+
+                            if (dropLength > 4) {
+                                // Calculate end position with slight angle
+                                const endX = x + dropLength * rainAngle;
+                                const endY = y + dropLength;
+
+                                // Gradient rain streak - brighter at top, fading at bottom
+                                const gradient = ctx.createLinearGradient(x, y, endX, endY);
+                                const r = 160, g = 195, b = 255;
+                                gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${layer.opacity * 0.3})`);
+                                gradient.addColorStop(0.2, `rgba(${r}, ${g}, ${b}, ${layer.opacity})`);
+                                gradient.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${layer.opacity * 0.6})`);
+                                gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+                                ctx.strokeStyle = gradient;
+                                ctx.lineWidth = layer.size;
                                 ctx.lineCap = 'round';
                                 ctx.beginPath();
                                 ctx.moveTo(x, y);
-                                ctx.lineTo(x, y + dropLength);
+                                ctx.lineTo(endX, endY);
                                 ctx.stroke();
                             }
                         }
@@ -1143,14 +1088,15 @@
             }
 
             // Draw snow falling from clouds (only where there's snow)
-            // Snow extends over page background - full opacity for visibility
+            // Snow extends over page background - soft glowing flakes with depth
             const maxSnow = calculateMaxSnow();
             if (maxSnow > 0) {
-                // Draw snowflakes - solid white circles
+                // Multiple depth layers for parallax - closer flakes larger and brighter
                 const snowLayers = [
-                    { count: 600, size: 1.5 },
-                    { count: 500, size: 2.5 },
-                    { count: 350, size: 3.5 }
+                    { count: 400, size: 1.0, opacity: 0.3, blur: 0.5 },   // Far background - tiny, dim
+                    { count: 350, size: 1.8, opacity: 0.5, blur: 0.3 },   // Mid background
+                    { count: 300, size: 2.8, opacity: 0.7, blur: 0.2 },   // Mid foreground
+                    { count: 200, size: 4.0, opacity: 0.9, blur: 0 }      // Close foreground - large, bright
                 ];
 
                 snowLayers.forEach((layer, layerIdx) => {
@@ -1160,19 +1106,31 @@
                         const snowValue = interpolateData(weatherData.snow, t);
 
                         if (snowValue > 0.05 && noise(i * 3, layerIdx + 60) < snowValue) {
-                            // Snowflakes drift sideways slightly
-                            const drift = Math.sin(noise(i, layerIdx + 70) * Math.PI * 2) * 15;
+                            // Snowflakes drift sideways with gentle wave pattern
+                            const driftPhase = noise(i, layerIdx + 70) * Math.PI * 2;
+                            const driftAmount = 12 + noise(i * 2, layerIdx) * 10;
+                            const drift = Math.sin(driftPhase) * driftAmount;
                             const x = baseX + drift;
 
-                            // Snow falls from bottom of clouds down through extended precipitation area
-                            const snowStartY = cropAmount + 30; // Start 30px below visible top
+                            // Snow falls from clouds down through extended precipitation area
+                            const snowStartY = cropAmount + 20;
                             const snowEndY = skyHeight + snowValue * precipExtensionHeight;
                             const y = snowStartY + noise(i, layerIdx + 80) * (snowEndY - snowStartY);
 
-                            // Draw snowflake as solid white circle
-                            ctx.fillStyle = `rgb(255, 255, 255)`;
+                            // Size varies slightly per flake
+                            const sizeVariation = 0.7 + noise(i, layerIdx + 90) * 0.6;
+                            const flakeSize = layer.size * sizeVariation;
+
+                            // Draw snowflake with soft radial gradient for glow effect
+                            const gradient = ctx.createRadialGradient(x, y, 0, x, y, flakeSize);
+                            gradient.addColorStop(0, `rgba(255, 255, 255, ${layer.opacity})`);
+                            gradient.addColorStop(0.4, `rgba(240, 248, 255, ${layer.opacity * 0.7})`);
+                            gradient.addColorStop(0.8, `rgba(220, 235, 255, ${layer.opacity * 0.3})`);
+                            gradient.addColorStop(1, `rgba(200, 220, 255, 0)`);
+
+                            ctx.fillStyle = gradient;
                             ctx.beginPath();
-                            ctx.arc(x, y, layer.size, 0, Math.PI * 2);
+                            ctx.arc(x, y, flakeSize * 1.5, 0, Math.PI * 2);
                             ctx.fill();
                         }
                     }
@@ -1182,13 +1140,14 @@
         }
 
         // Temperature color mapping (global for tooltip use)
-        // Temperature colors: white → blue → yellow → orange → red
+        // Temperature colors: refined palette with better saturation
+        // white/ice → cool blue → teal → warm yellow → orange → deep red
         const tempColors = {
-            white: { r: 240, g: 245, b: 255 },   // Below 5°C
-            blue: { r: 100, g: 150, b: 220 },    // 5°C to 10°C
-            yellow: { r: 250, g: 230, b: 100 },  // 10°C to 20°C
-            orange: { r: 245, g: 160, b: 90 },   // 20°C to 30°C
-            red: { r: 220, g: 80, b: 60 }        // Above 30°C
+            white: { r: 230, g: 240, b: 255 },   // Below 5°C - icy white-blue
+            blue: { r: 80, g: 160, b: 230 },     // 5°C to 10°C - cool blue
+            yellow: { r: 255, g: 220, b: 80 },   // 10°C to 20°C - warm golden
+            orange: { r: 255, g: 145, b: 70 },   // 20°C to 30°C - warm orange
+            red: { r: 235, g: 70, b: 55 }        // Above 30°C - vivid red
         };
         // Temperature thresholds (normalized: (temp + 25) / 60)
         const tempThresholds = {
@@ -1198,25 +1157,19 @@
             thirty: (30 + 25) / 60    // 30°C = 0.917
         };
 
-        function getTempColorGlobal(tempValue) {
+        function getTempColor(tempValue) {
             const { white, blue, yellow, orange, red } = tempColors;
             const { five, ten, twenty, thirty } = tempThresholds;
 
-            if (tempValue < five) {
-                return white;
-            } else if (tempValue < ten) {
-                const t = (tempValue - five) / (ten - five);
-                return lerpColor(white, blue, t);
-            } else if (tempValue < twenty) {
-                const t = (tempValue - ten) / (twenty - ten);
-                return lerpColor(blue, yellow, t);
-            } else if (tempValue < thirty) {
-                const t = (tempValue - twenty) / (thirty - twenty);
-                return lerpColor(yellow, orange, t);
-            } else {
-                const t = Math.min(1, (tempValue - thirty) / (1 - thirty));
-                return lerpColor(orange, red, t);
-            }
+            if (tempValue < five) return white;
+            if (tempValue < ten) return lerpColor(white, blue, (tempValue - five) / (ten - five));
+            if (tempValue < twenty) return lerpColor(blue, yellow, (tempValue - ten) / (twenty - ten));
+            if (tempValue < thirty) return lerpColor(yellow, orange, (tempValue - twenty) / (thirty - twenty));
+            return lerpColor(orange, red, Math.min(1, (tempValue - thirty) / (1 - thirty)));
+        }
+
+        function getDaylightBrightness(dayValue) {
+            return 0.05 + 0.95 * smoothstep(0.1, 0.65, dayValue);
         }
 
         // Temperature Curve on page background
@@ -1242,62 +1195,7 @@
             canvas.style.height = height + 'px';
             ctx.scale(2, 2);
 
-            // Temperature colors: white → blue → yellow → orange → red
-            // Smooth transitions between temperature ranges
-            const whiteColor = { r: 240, g: 245, b: 255 };   // White for below 5°C
-            const blueColor = { r: 100, g: 150, b: 220 };    // Blue for 5°C to 10°C
-            const yellowColor = { r: 250, g: 230, b: 100 };  // Yellow for 10°C to 20°C
-            const orangeColor = { r: 245, g: 160, b: 90 };   // Orange for 20°C to 30°C
-            const redColor = { r: 220, g: 80, b: 60 };       // Red for above 30°C
-
-            // Temperature thresholds (normalized: (temp + 25) / 60)
-            const fiveNormT = (5 + 25) / 60;      // 5°C = 0.5
-            const tenNormT = (10 + 25) / 60;      // 10°C = 0.583
-            const twentyNormT = (20 + 25) / 60;   // 20°C = 0.75
-            const thirtyNormT = (30 + 25) / 60;   // 30°C = 0.917
-
-            // Get temperature color with smooth transitions
-            function getTempColor(tempValue) {
-                if (tempValue < fiveNormT) {
-                    // Below 5°C: white (stays white, no transition needed at bottom)
-                    return whiteColor;
-                } else if (tempValue < tenNormT) {
-                    // 5°C to 10°C: white → blue
-                    const t = (tempValue - fiveNormT) / (tenNormT - fiveNormT);
-                    return lerpColor(whiteColor, blueColor, t);
-                } else if (tempValue < twentyNormT) {
-                    // 10°C to 20°C: blue → yellow
-                    const t = (tempValue - tenNormT) / (twentyNormT - tenNormT);
-                    return lerpColor(blueColor, yellowColor, t);
-                } else if (tempValue < thirtyNormT) {
-                    // 20°C to 30°C: yellow → orange
-                    const t = (tempValue - twentyNormT) / (thirtyNormT - twentyNormT);
-                    return lerpColor(yellowColor, orangeColor, t);
-                } else {
-                    // Above 30°C: orange → red
-                    const t = Math.min(1, (tempValue - thirtyNormT) / (1 - thirtyNormT));
-                    return lerpColor(orangeColor, redColor, t);
-                }
-            }
-
-            // Calculate brightness based on daylight
-            // Much dimmer at night to blend with background, dimmed during dawn/dusk
-            // Uses smoothstep for continuous transitions without visible lines
-            function getDaylightBrightness(dayValue) {
-                // Night minimum brightness
-                const nightBrightness = 0.05;
-                // Full day brightness
-                const dayBrightness = 1.0;
-
-                // Use a single smooth curve from night to day
-                // smoothstep provides continuous first derivative (no visible lines)
-                const t = smoothstep(0.1, 0.65, dayValue);
-                return nightBrightness + (dayBrightness - nightBrightness) * t;
-            }
-
             // Draw the temperature curve with gradient fill
-            // Position curve so the top of the reference line (40°C) aligns with sky ribbon bottom
-            // Then move up by 200px
             const curveHeight = Math.min(height * 0.264, 144); // Curve height, capped
             // The reference line top is at curveBottom - (maxTempNorm * curveHeight * 0.8)
             // where maxTempNorm = (45 + 25) / 60 = 1.167 (clamped to ~1)
@@ -1312,75 +1210,51 @@
             const ribbonRight = skyRect.right - wrapperRect.left;
             const ribbonWidth = ribbonRight - ribbonLeft;
 
-            // First pass: draw filled area under the curve with gradient
-            // Use smooth Catmull-Rom interpolation for temperature
-            for (let x = Math.floor(ribbonLeft); x < Math.ceil(ribbonRight); x++) {
+            // Pre-calculate curve data for all x positions
+            const startX = Math.floor(ribbonLeft), endX = Math.ceil(ribbonRight);
+            const curveData = [];
+            for (let x = startX; x < endX; x++) {
                 const t = (x - ribbonLeft) / ribbonWidth;
                 const tempValue = interpolateDataSmooth(weatherData.temperature, t, true);
                 const dayValue = interpolateData(weatherData.daylight, t);
                 const brightness = getDaylightBrightness(dayValue);
-
                 const color = getTempColor(tempValue);
-                const curveY = curveBottom - (mapTempToDisplayRange(tempValue) * curveHeight * 0.8);
-
-                // Create vertical gradient from curve to bottom - fades rapidly
-                const gradient = ctx.createLinearGradient(x, curveY, x, curveBottom);
-                gradient.addColorStop(0, colorToString(color, 0.3 * brightness));
-                gradient.addColorStop(0.15, colorToString(color, 0.1 * brightness));
-                gradient.addColorStop(0.3, colorToString(color, 0.02 * brightness));
-                gradient.addColorStop(1, colorToString(color, 0));
-
-                ctx.fillStyle = gradient;
-                ctx.fillRect(x, curveY, 1.5, curveBottom - curveY);
+                const y = curveBottom - (mapTempToDisplayRange(tempValue) * curveHeight * 0.8);
+                curveData.push({ x, y, color, brightness, tempValue });
             }
 
-            // Second pass: draw the curve line itself using smooth interpolation
-            ctx.lineWidth = 3;
+            // Draw filled area under curve
+            curveData.forEach(d => {
+                const gradient = ctx.createLinearGradient(d.x, d.y, d.x, curveBottom);
+                for (let i = 0; i <= 8; i++) {
+                    const t = i / 8;
+                    gradient.addColorStop(t, colorToString(d.color, 0.35 * d.brightness * Math.pow(1 - t, 2.5)));
+                }
+                ctx.fillStyle = gradient;
+                ctx.fillRect(d.x, d.y, 1.5, curveBottom - d.y);
+            });
+
+            // Draw curve layers (glow + line + highlight) in single pass per layer
+            const layers = [
+                { width: 12, alpha: 0.08 },
+                { width: 6, alpha: 0.18 },
+                { width: 2.5, alpha: 0.85 },
+                { width: 1, alpha: 0.5, highlight: true }
+            ];
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-
-            // Draw curve with varying color and brightness
-            for (let x = Math.floor(ribbonLeft); x < Math.ceil(ribbonRight) - 1; x++) {
-                const t1 = (x - ribbonLeft) / ribbonWidth;
-                const t2 = (x + 1 - ribbonLeft) / ribbonWidth;
-
-                const tempValue1 = interpolateDataSmooth(weatherData.temperature, t1, true);
-                const tempValue2 = interpolateDataSmooth(weatherData.temperature, t2, true);
-                const dayValue = interpolateData(weatherData.daylight, t1);
-                const brightness = getDaylightBrightness(dayValue);
-
-                const color = getTempColor(tempValue1);
-                const y1 = curveBottom - (mapTempToDisplayRange(tempValue1) * curveHeight * 0.8);
-                const y2 = curveBottom - (mapTempToDisplayRange(tempValue2) * curveHeight * 0.8);
-
-                ctx.strokeStyle = colorToString(color, 0.8 * brightness);
-                ctx.beginPath();
-                ctx.moveTo(x, y1);
-                ctx.lineTo(x + 1, y2);
-                ctx.stroke();
-            }
-
-            // Add glow effect around the curve
-            ctx.lineWidth = 8;
-            for (let x = Math.floor(ribbonLeft); x < Math.ceil(ribbonRight) - 1; x++) {
-                const t1 = (x - ribbonLeft) / ribbonWidth;
-                const t2 = (x + 1 - ribbonLeft) / ribbonWidth;
-
-                const tempValue1 = interpolateDataSmooth(weatherData.temperature, t1, true);
-                const tempValue2 = interpolateDataSmooth(weatherData.temperature, t2, true);
-                const dayValue = interpolateData(weatherData.daylight, t1);
-                const brightness = getDaylightBrightness(dayValue);
-
-                const color = getTempColor(tempValue1);
-                const y1 = curveBottom - (mapTempToDisplayRange(tempValue1) * curveHeight * 0.8);
-                const y2 = curveBottom - (mapTempToDisplayRange(tempValue2) * curveHeight * 0.8);
-
-                ctx.strokeStyle = colorToString(color, 0.15 * brightness);
-                ctx.beginPath();
-                ctx.moveTo(x, y1);
-                ctx.lineTo(x + 1, y2);
-                ctx.stroke();
-            }
+            layers.forEach(layer => {
+                ctx.lineWidth = layer.width;
+                for (let i = 0; i < curveData.length - 1; i++) {
+                    const d1 = curveData[i], d2 = curveData[i + 1];
+                    const c = layer.highlight ? { r: Math.min(255, d1.color.r + 40), g: Math.min(255, d1.color.g + 40), b: Math.min(255, d1.color.b + 40) } : d1.color;
+                    ctx.strokeStyle = colorToString(c, layer.alpha * d1.brightness);
+                    ctx.beginPath();
+                    ctx.moveTo(d1.x, d1.y);
+                    ctx.lineTo(d2.x, d2.y);
+                    ctx.stroke();
+                }
+            });
 
             // Draw temperature reference line at noon
             // Shows the limited range (tempDisplayMin to tempDisplayMax) using the same color coding
@@ -1433,14 +1307,24 @@
                 const markerX = ribbonLeft + currentTimeT * ribbonWidth;
 
                 // Get the actual position of the sky ribbon element relative to wrapper
-                const skyTopInWrapper = (skyRect.top - wrapperRect.top) - 2;  // 2 pixels above the sky display
+                const skyTopInWrapper = (skyRect.top - wrapperRect.top) - 2;
 
-                // Draw a small triangle with bottom tip 2px above sky
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                // Draw a refined triangle marker with soft glow
+                // Outer glow
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
                 ctx.beginPath();
-                ctx.moveTo(markerX, skyTopInWrapper);             // Bottom tip 2px above sky
-                ctx.lineTo(markerX - 5, skyTopInWrapper - 8);     // Top left
-                ctx.lineTo(markerX + 5, skyTopInWrapper - 8);     // Top right
+                ctx.moveTo(markerX, skyTopInWrapper + 1);
+                ctx.lineTo(markerX - 7, skyTopInWrapper - 10);
+                ctx.lineTo(markerX + 7, skyTopInWrapper - 10);
+                ctx.closePath();
+                ctx.fill();
+
+                // Inner triangle
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.beginPath();
+                ctx.moveTo(markerX, skyTopInWrapper);
+                ctx.lineTo(markerX - 4, skyTopInWrapper - 7);
+                ctx.lineTo(markerX + 4, skyTopInWrapper - 7);
                 ctx.closePath();
                 ctx.fill();
             }
@@ -1885,13 +1769,14 @@
         const tempOverlay = document.getElementById('tempCurveOverlay');
         const tempTooltip = document.getElementById('tempTooltip');
 
-        // Position the overlay to cover the temperature curve area
+        // Position the overlay to cover from below sky tooltip area down to temperature curve
         function updateOverlayPosition() {
             const wrapper = document.getElementById('weatherDisplayWrapper');
             const skyRibbonEl = document.getElementById('skyRibbon');
+            const daySelectorEl = document.querySelector('.day-selector');
             const wrapperRect = wrapper.getBoundingClientRect();
             const skyRect = skyRibbonEl.getBoundingClientRect();
-            const width = window.innerWidth;
+            const daySelectorRect = daySelectorEl.getBoundingClientRect();
             const height = wrapperRect.height || window.innerHeight * 0.6;
 
             // Calculate sky ribbon position relative to wrapper
@@ -1900,16 +1785,27 @@
             // Get sky ribbon bounds relative to the wrapper
             const ribbonLeft = skyRect.left - wrapperRect.left;
             const ribbonWidth = skyRect.width;
+            const skyTopInWrapper = skyRect.top - wrapperRect.top;
 
-            // Match the temperature curve positioning (shifted up 200px)
+            // Sky tooltip stops at 144px from top of sky ribbon
+            const visibleSkyHeight = 144;
+            const tempOverlayTop = skyTopInWrapper + visibleSkyHeight;
+
+            // Match the temperature curve positioning exactly as in drawTemperatureCurve()
             const curveHeight = Math.min(height * 0.264, 144);
             const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
-            const curveTop = curveBottom - curveHeight;
+
+            // Stop overlay before the day selector (with 10px buffer)
+            const daySelectorTopInWrapper = daySelectorRect.top - wrapperRect.top;
+            const overlayBottom = Math.min(curveBottom + 20, daySelectorTopInWrapper - 10);
+
+            // Ensure positive height, hide if invalid
+            const overlayHeight = Math.max(0, overlayBottom - tempOverlayTop);
 
             tempOverlay.style.left = `${ribbonLeft}px`;
-            tempOverlay.style.top = `${curveTop}px`;
+            tempOverlay.style.top = `${tempOverlayTop}px`;
             tempOverlay.style.width = `${ribbonWidth}px`;
-            tempOverlay.style.height = `${curveHeight}px`;
+            tempOverlay.style.height = `${overlayHeight}px`;
         }
 
         updateOverlayPosition();
@@ -1918,15 +1814,28 @@
         tempOverlay.addEventListener('mousemove', (e) => {
             // Get sky ribbon bounds in screen coordinates (for mouse position comparison)
             const skyRibbonEl = document.getElementById('skyRibbon');
+            const daySelectorEl = document.querySelector('.day-selector');
             const skyRect = skyRibbonEl.getBoundingClientRect();
+            const daySelectorRect = daySelectorEl.getBoundingClientRect();
             const ribbonLeft = skyRect.left;  // Screen coordinates for mouse comparison
             const ribbonWidth = skyRect.width;
 
             const mouseX = e.clientX;
             const mouseY = e.clientY;
 
+            // Hide tooltip if mouse is at or below the day selector
+            if (mouseY >= daySelectorRect.top - 10) {
+                tempTooltip.style.display = 'none';
+                return;
+            }
+
             // Calculate position along the ribbon (0 to 1)
             const t = (mouseX - ribbonLeft) / ribbonWidth;
+
+            // Calculate hour from position (map t from display range to full 24h)
+            const displayHours = displayEndHour - displayStartHour;
+            const hour = Math.round(displayStartHour + t * displayHours);
+            const hourStr = `${hour}h`;
 
             // Get temperature value using the same interpolation as the curve
             const tempNorm = interpolateDataSmooth(weatherData.temperature, t, true);
@@ -1936,11 +1845,19 @@
             const tempCelsius = tempNorm * 60 - 25;
 
             // Get color for this temperature
-            const tempColor = getTempColorGlobal(tempNorm);
+            const tempColor = getTempColor(tempNorm);
 
-            // Display the tooltip with temperature-colored text
-            tempTooltip.textContent = `${tempCelsius.toFixed(1)}°C`;
-            tempTooltip.style.color = `rgb(${tempColor.r}, ${tempColor.g}, ${tempColor.b})`;
+            // Get wind data
+            const windSpeedKmh = weatherData.windSpeedRaw ? interpolateData(weatherData.windSpeedRaw, t) : 0;
+
+            // Build tooltip content
+            let tempInfo = `<span style="color: rgb(${tempColor.r}, ${tempColor.g}, ${tempColor.b})">${tempCelsius.toFixed(1)}°C</span>`;
+            if (windSpeedKmh > 15) {
+                tempInfo += ` | ${Math.round(windSpeedKmh)} km/h wind`;
+            }
+
+            // Display the tooltip with hour on first line, temperature on second
+            tempTooltip.innerHTML = `<div class="tooltip-hour">${hourStr}</div><div class="tooltip-value">${tempInfo}</div>`;
             tempTooltip.style.left = `${mouseX}px`;
             tempTooltip.style.top = `${mouseY}px`;
             tempTooltip.style.display = 'block';
@@ -1976,43 +1893,48 @@
             // Calculate position along the ribbon (0 to 1)
             const t = (mouseX - rect.left) / rect.width;
 
-            // Get cloud cover value using the same interpolation
+            // Calculate hour from position (map t from display range to full 24h)
+            const displayHours = displayEndHour - displayStartHour;
+            const hour = Math.round(displayStartHour + t * displayHours);
+            const hourStr = `${hour}h`;
+
+            // Get cloud cover value and daylight for color calculation
             const cloudValue = interpolateData(weatherData.clouds, t);
             const cloudPercent = Math.round(cloudValue * 100);
+            const dayValue = interpolateData(weatherData.daylight, t);
 
             // Get precipitation data
             const precipMm = interpolateData(weatherData.precipMm, t);
             const precipProb = interpolateData(weatherData.precipProbability, t);
             const snowCm = weatherData.snowCm ? interpolateData(weatherData.snowCm, t) : 0;
 
-            // Get wind data
-            const windSpeedKmh = weatherData.windSpeedRaw ? interpolateData(weatherData.windSpeedRaw, t) : 0;
+            // Build tooltip text for weather info with color
+            let cloudText, cloudColor;
+            if (cloudPercent < 20) {
+                // Clear sky - show in blue
+                cloudText = 'clear sky';
+                cloudColor = 'rgb(100, 180, 235)';
+            } else {
+                // Cloudy - use daytime gray color (always bright, regardless of time of day)
+                const rainValue = interpolateData(weatherData.rain, t);
+                const baseGray = Math.round(230 - cloudValue * 30 - rainValue * 40);
+                cloudText = `${cloudPercent}% clouds`;
+                cloudColor = `rgb(${baseGray}, ${baseGray}, ${baseGray})`;
+            }
 
-            // Build tooltip text
-            let tooltipText = `${cloudPercent}% clouds`;
+            let weatherInfo = `<span style="color: ${cloudColor}">${cloudText}</span>`;
 
             // Add precipitation info if there's any rain or snow
-            if (precipMm > 0.1 || snowCm > 0.1 || precipProb > 5) {
-                if (snowCm > 0.1) {
-                    // Show snow
-                    tooltipText += ` | ${snowCm.toFixed(1)}cm snow`;
-                } else if (precipMm > 0.1) {
-                    // Show rain
-                    tooltipText += ` | ${precipMm.toFixed(1)}mm rain`;
-                }
-                // Show probability if significant
-                if (precipProb > 5) {
-                    tooltipText += ` (${Math.round(precipProb)}%)`;
-                }
+            if (snowCm > 0.1) {
+                // Show snow in white
+                weatherInfo += ` | <span style="color: rgb(255, 255, 255)">${snowCm.toFixed(1)}cm snow</span>`;
+            } else if (precipMm > 0.1) {
+                // Show rain in blue
+                weatherInfo += ` | <span style="color: rgb(100, 180, 235)">${precipMm.toFixed(1)}mm rain</span>`;
             }
 
-            // Add wind info if substantial (>15 km/h)
-            if (windSpeedKmh > 15) {
-                tooltipText += ` | ${Math.round(windSpeedKmh)} km/h wind`;
-            }
-
-            // Display the tooltip
-            skyTooltip.textContent = tooltipText;
+            // Display the tooltip with hour on first line, weather info on second
+            skyTooltip.innerHTML = `<div class="tooltip-hour">${hourStr}</div><div class="tooltip-value">${weatherInfo}</div>`;
             skyTooltip.style.left = `${mouseX}px`;
             skyTooltip.style.top = `${mouseY}px`;
             skyTooltip.style.display = 'block';
@@ -2034,15 +1956,8 @@
                 swipeIndicator.classList.add('hidden');
             }, 3000);
 
-            // Swipe gesture handling
-            let touchStartX = 0;
-            let touchStartY = 0;
-            let touchEndX = 0;
-            let touchEndY = 0;
-            let isSwiping = false;
-
-            const minSwipeDistance = 50; // Minimum swipe distance in pixels
-            const maxVerticalDistance = 100; // Maximum vertical movement to count as horizontal swipe
+            let touchStartX = 0, touchStartY = 0, isSwiping = false;
+            const minSwipeDistance = 50, maxVerticalDistance = 100;
 
             document.addEventListener('touchstart', (e) => {
                 touchStartX = e.changedTouches[0].screenX;
@@ -2050,46 +1965,14 @@
                 isSwiping = true;
             }, { passive: true });
 
-            document.addEventListener('touchmove', (e) => {
-                if (!isSwiping) return;
-
-                touchEndX = e.changedTouches[0].screenX;
-                touchEndY = e.changedTouches[0].screenY;
-
-                // Calculate movement
-                const deltaX = Math.abs(touchEndX - touchStartX);
-                const deltaY = Math.abs(touchEndY - touchStartY);
-
-                // If vertical movement is dominant, allow normal scrolling
-                // Only prevent default for clear horizontal swipes
-                if (deltaX > deltaY && deltaX > 20) {
-                    // Horizontal swipe detected - this is for date navigation
-                    // We don't prevent default here to allow smooth experience
-                }
-            }, { passive: true });
-
             document.addEventListener('touchend', async (e) => {
                 if (!isSwiping) return;
                 isSwiping = false;
-
-                touchEndX = e.changedTouches[0].screenX;
-                touchEndY = e.changedTouches[0].screenY;
-
-                const deltaX = touchEndX - touchStartX;
-                const deltaY = Math.abs(touchEndY - touchStartY);
-
-                // Only trigger date change for horizontal swipes
-                // that don't have too much vertical movement
+                const deltaX = e.changedTouches[0].screenX - touchStartX;
+                const deltaY = Math.abs(e.changedTouches[0].screenY - touchStartY);
                 if (Math.abs(deltaX) >= minSwipeDistance && deltaY < maxVerticalDistance) {
-                    if (deltaX < 0 && currentDayOffset < maxDayOffset) {
-                        // Swipe left = next day
-                        currentDayOffset++;
-                        await refreshView();
-                    } else if (deltaX > 0 && currentDayOffset > 0) {
-                        // Swipe right = previous day
-                        currentDayOffset--;
-                        await refreshView();
-                    }
+                    if (deltaX < 0 && currentDayOffset < maxDayOffset) { currentDayOffset++; await refreshView(); }
+                    else if (deltaX > 0 && currentDayOffset > 0) { currentDayOffset--; await refreshView(); }
                 }
             }, { passive: true });
         } else {
