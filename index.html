@@ -148,11 +148,11 @@
             background: rgba(255, 255, 255, 0.08);
         }
         .city-label {
-            color: rgba(200, 210, 230, 0.85);
-            font-size: 0.85rem;
+            color: rgba(235, 238, 245, 0.9);
+            font-size: 0.9rem;
             min-width: 120px;
         }
-        .city-label:hover { color: rgba(235, 240, 250, 0.95); }
+        .city-label:hover { color: #fff; }
 
         .city-input {
             background: rgba(255, 255, 255, 0.15);
@@ -319,7 +319,8 @@
             }
         }
 
-        @media (max-width: 480px) {
+        /* Portrait smartphone layout */
+        @media (max-width: 480px) and (orientation: portrait) {
             body {
                 padding: 0 5px;
                 padding-top: 2vh;
@@ -330,28 +331,53 @@
             }
 
             .weather-display-wrapper {
-                padding-bottom: 30px;
+                padding-bottom: 20px;
             }
 
             .day-selector {
-                bottom: 103px;
-                gap: 5px;
+                position: relative;
+                bottom: auto;
+                margin-top: 15px;
+                gap: 0;
             }
 
             .day-selector-content {
-                width: 220px;
-                flex-direction: column;
-                gap: 2px;
+                width: 100%;
+                flex-direction: row;
+                justify-content: space-between;
+                padding: 0 15px;
             }
 
             .day-label {
-                font-size: 0.75rem;
-                width: 180px;
+                font-size: 0.8rem;
+                width: auto;
+                text-align: right;
             }
 
             .city-label {
+                font-size: 0.8rem;
+                min-width: auto;
+                text-align: left;
+            }
+        }
+
+        /* Landscape smartphone - keep centered layout */
+        @media (max-width: 480px) and (orientation: landscape) {
+            body {
+                padding: 0 10px;
+                padding-top: 2vh;
+            }
+
+            .day-selector {
+                bottom: 60px;
+            }
+
+            .day-selector-content {
+                width: 260px;
+            }
+
+            .day-label, .city-label {
                 font-size: 0.75rem;
-                min-width: 80px;
             }
         }
 
@@ -2109,106 +2135,108 @@
             tempTooltip.style.display = 'none';
         });
 
-        // Sky tooltip on mousemove
+        // Touch device detection
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+        // Sky tooltip on mousemove (desktop only - disabled on touch to allow tap navigation)
         const skyRibbon = document.getElementById('skyRibbon');
         const skyTooltip = document.getElementById('skyTooltip');
 
-        skyRibbon.addEventListener('mousemove', (e) => {
-            const rect = skyRibbon.getBoundingClientRect();
-            const mouseX = e.clientX;
-            const mouseY = e.clientY;
+        if (!isTouchDevice) {
+            skyRibbon.addEventListener('mousemove', (e) => {
+                const rect = skyRibbon.getBoundingClientRect();
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
 
-            // Calculate the sky portion height (excluding precipitation extension)
-            // Sky portion ends at skyFadeEndY which is fullBaseHeight + skyExtensionHeight
-            // But we display from cropAmount, so visible sky height is:
-            // skyFadeEndY - cropAmount = (240 + 36) - (240 * 0.55) = 276 - 132 = 144px
-            const visibleSkyHeight = 144; // Approximate visible sky height before precipitation area
-            const skyBottomY = rect.top + visibleSkyHeight;
+                // Calculate the sky portion height (excluding precipitation extension)
+                // Sky portion ends at skyFadeEndY which is fullBaseHeight + skyExtensionHeight
+                // But we display from cropAmount, so visible sky height is:
+                // skyFadeEndY - cropAmount = (240 + 36) - (240 * 0.55) = 276 - 132 = 144px
+                const visibleSkyHeight = 144; // Approximate visible sky height before precipitation area
+                const skyBottomY = rect.top + visibleSkyHeight;
 
-            // Hide tooltip when mouse is below the sky portion (in precipitation area)
-            // This prevents interference with the temperature curve overlay
-            if (mouseY > skyBottomY) {
+                // Hide tooltip when mouse is below the sky portion (in precipitation area)
+                // This prevents interference with the temperature curve overlay
+                if (mouseY > skyBottomY) {
+                    skyTooltip.style.display = 'none';
+                    return;
+                }
+
+                // Calculate position along the ribbon (0 to 1)
+                const t = (mouseX - rect.left) / rect.width;
+
+                // Calculate hour from position (map t from display range to full 24h)
+                const displayHours = displayEndHour - displayStartHour;
+                const hour = Math.round(displayStartHour + t * displayHours);
+                const hourStr = `${hour}h`;
+
+                // Get cloud cover value and daylight for color calculation
+                const cloudValue = interpolateData(weatherData.clouds, t);
+                const cloudPercent = Math.round(cloudValue * 100);
+                const dayValue = interpolateData(weatherData.daylight, t);
+
+                // Get precipitation data
+                const precipMm = interpolateData(weatherData.precipMm, t);
+                const precipProb = interpolateData(weatherData.precipProbability, t);
+                const snowCm = weatherData.snowCm ? interpolateData(weatherData.snowCm, t) : 0;
+
+                // Build tooltip text for weather info with color
+                let cloudText, cloudColor;
+                if (cloudPercent < 20) {
+                    // Clear sky - show in blue
+                    cloudText = 'clear sky';
+                    cloudColor = 'rgb(100, 180, 235)';
+                } else {
+                    // Cloudy - use daytime gray color (always bright, regardless of time of day)
+                    const rainValue = interpolateData(weatherData.rain, t);
+                    const baseGray = Math.round(230 - cloudValue * 30 - rainValue * 40);
+                    cloudText = `${cloudPercent}% clouds`;
+                    cloudColor = `rgb(${baseGray}, ${baseGray}, ${baseGray})`;
+                }
+
+                let weatherInfo = `<span style="color: ${cloudColor}">${cloudText}</span>`;
+
+                // Add precipitation info if there's any rain or snow
+                if (snowCm > 0.1) {
+                    // Show snow in white
+                    weatherInfo += ` | <span style="color: rgb(255, 255, 255)">${snowCm.toFixed(1)}cm snow</span>`;
+                } else if (precipMm > 0.1) {
+                    // Show rain in blue
+                    weatherInfo += ` | <span style="color: rgb(100, 180, 235)">${precipMm.toFixed(1)}mm rain</span>`;
+                }
+
+                // Add sunrise/sunset info if within 1 hour
+                const currentHour = displayStartHour + t * (displayEndHour - displayStartHour);
+                const sunriseHour = weatherData.sunriseHour;
+                const sunsetHour = weatherData.sunsetHour;
+
+                if (Math.abs(currentHour - sunriseHour) <= 1) {
+                    // Get sky color at sunrise time
+                    const sunriseDayValue = interpolateData(weatherData.daylight, (sunriseHour - displayStartHour) / (displayEndHour - displayStartHour));
+                    const skyColor = getSkyColor(sunriseDayValue, 0);
+                    const sunriseMinutes = Math.round((sunriseHour % 1) * 60);
+                    const sunriseTimeStr = `${Math.floor(sunriseHour)}h${sunriseMinutes.toString().padStart(2, '0')}`;
+                    weatherInfo += ` | <span style="color: rgb(${skyColor.bottom.r}, ${skyColor.bottom.g}, ${skyColor.bottom.b})">sunrise ${sunriseTimeStr}</span>`;
+                } else if (Math.abs(currentHour - sunsetHour) <= 1) {
+                    // Get sky color at sunset time
+                    const sunsetDayValue = interpolateData(weatherData.daylight, (sunsetHour - displayStartHour) / (displayEndHour - displayStartHour));
+                    const skyColor = getSkyColor(sunsetDayValue, 0);
+                    const sunsetMinutes = Math.round((sunsetHour % 1) * 60);
+                    const sunsetTimeStr = `${Math.floor(sunsetHour)}h${sunsetMinutes.toString().padStart(2, '0')}`;
+                    weatherInfo += ` | <span style="color: rgb(${skyColor.bottom.r}, ${skyColor.bottom.g}, ${skyColor.bottom.b})">sunset ${sunsetTimeStr}</span>`;
+                }
+
+                // Display the tooltip with hour on first line, weather info on second
+                skyTooltip.innerHTML = `<div class="tooltip-hour">${hourStr}</div><div class="tooltip-value">${weatherInfo}</div>`;
+                skyTooltip.style.left = `${mouseX}px`;
+                skyTooltip.style.top = `${mouseY}px`;
+                skyTooltip.style.display = 'block';
+            });
+
+            skyRibbon.addEventListener('mouseleave', () => {
                 skyTooltip.style.display = 'none';
-                return;
-            }
-
-            // Calculate position along the ribbon (0 to 1)
-            const t = (mouseX - rect.left) / rect.width;
-
-            // Calculate hour from position (map t from display range to full 24h)
-            const displayHours = displayEndHour - displayStartHour;
-            const hour = Math.round(displayStartHour + t * displayHours);
-            const hourStr = `${hour}h`;
-
-            // Get cloud cover value and daylight for color calculation
-            const cloudValue = interpolateData(weatherData.clouds, t);
-            const cloudPercent = Math.round(cloudValue * 100);
-            const dayValue = interpolateData(weatherData.daylight, t);
-
-            // Get precipitation data
-            const precipMm = interpolateData(weatherData.precipMm, t);
-            const precipProb = interpolateData(weatherData.precipProbability, t);
-            const snowCm = weatherData.snowCm ? interpolateData(weatherData.snowCm, t) : 0;
-
-            // Build tooltip text for weather info with color
-            let cloudText, cloudColor;
-            if (cloudPercent < 20) {
-                // Clear sky - show in blue
-                cloudText = 'clear sky';
-                cloudColor = 'rgb(100, 180, 235)';
-            } else {
-                // Cloudy - use daytime gray color (always bright, regardless of time of day)
-                const rainValue = interpolateData(weatherData.rain, t);
-                const baseGray = Math.round(230 - cloudValue * 30 - rainValue * 40);
-                cloudText = `${cloudPercent}% clouds`;
-                cloudColor = `rgb(${baseGray}, ${baseGray}, ${baseGray})`;
-            }
-
-            let weatherInfo = `<span style="color: ${cloudColor}">${cloudText}</span>`;
-
-            // Add precipitation info if there's any rain or snow
-            if (snowCm > 0.1) {
-                // Show snow in white
-                weatherInfo += ` | <span style="color: rgb(255, 255, 255)">${snowCm.toFixed(1)}cm snow</span>`;
-            } else if (precipMm > 0.1) {
-                // Show rain in blue
-                weatherInfo += ` | <span style="color: rgb(100, 180, 235)">${precipMm.toFixed(1)}mm rain</span>`;
-            }
-
-            // Add sunrise/sunset info if within 1 hour
-            const currentHour = displayStartHour + t * (displayEndHour - displayStartHour);
-            const sunriseHour = weatherData.sunriseHour;
-            const sunsetHour = weatherData.sunsetHour;
-
-            if (Math.abs(currentHour - sunriseHour) <= 1) {
-                // Get sky color at sunrise time
-                const sunriseDayValue = interpolateData(weatherData.daylight, (sunriseHour - displayStartHour) / (displayEndHour - displayStartHour));
-                const skyColor = getSkyColor(sunriseDayValue, 0);
-                const sunriseMinutes = Math.round((sunriseHour % 1) * 60);
-                const sunriseTimeStr = `${Math.floor(sunriseHour)}h${sunriseMinutes.toString().padStart(2, '0')}`;
-                weatherInfo += ` | <span style="color: rgb(${skyColor.bottom.r}, ${skyColor.bottom.g}, ${skyColor.bottom.b})">sunrise ${sunriseTimeStr}</span>`;
-            } else if (Math.abs(currentHour - sunsetHour) <= 1) {
-                // Get sky color at sunset time
-                const sunsetDayValue = interpolateData(weatherData.daylight, (sunsetHour - displayStartHour) / (displayEndHour - displayStartHour));
-                const skyColor = getSkyColor(sunsetDayValue, 0);
-                const sunsetMinutes = Math.round((sunsetHour % 1) * 60);
-                const sunsetTimeStr = `${Math.floor(sunsetHour)}h${sunsetMinutes.toString().padStart(2, '0')}`;
-                weatherInfo += ` | <span style="color: rgb(${skyColor.bottom.r}, ${skyColor.bottom.g}, ${skyColor.bottom.b})">sunset ${sunsetTimeStr}</span>`;
-            }
-
-            // Display the tooltip with hour on first line, weather info on second
-            skyTooltip.innerHTML = `<div class="tooltip-hour">${hourStr}</div><div class="tooltip-value">${weatherInfo}</div>`;
-            skyTooltip.style.left = `${mouseX}px`;
-            skyTooltip.style.top = `${mouseY}px`;
-            skyTooltip.style.display = 'block';
-        });
-
-        skyRibbon.addEventListener('mouseleave', () => {
-            skyTooltip.style.display = 'none';
-        });
-
-        // Touch device detection and tap-to-navigate
-        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+            });
+        }
 
         if (isTouchDevice) {
             document.body.classList.add('touch-device');
