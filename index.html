@@ -134,6 +134,7 @@
             align-items: center;
             justify-content: center;
             width: 320px;
+            position: relative;
         }
 
         .city-label, .day-label {
@@ -151,8 +152,31 @@
             color: rgba(235, 238, 245, 0.9);
             font-size: 0.9rem;
             min-width: 120px;
+            position: relative;
         }
         .city-label:hover { color: #fff; }
+
+        .set-default-btn {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 4px;
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            padding: 4px 12px;
+            transition: all 0.25s ease;
+            opacity: 0;
+            animation: fadeIn 0.3s ease forwards;
+            white-space: nowrap;
+        }
+        .set-default-btn:hover {
+            color: rgba(255, 255, 255, 0.9);
+        }
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
 
         .city-input {
             background: rgba(255, 255, 255, 0.15);
@@ -521,8 +545,38 @@
         // Cache for fetched weather data (keyed by city-dayOffset)
         const weatherCache = {};
 
+        // Load saved default city from localStorage
+        function loadDefaultCity() {
+            try {
+                const saved = localStorage.getItem('weatherRibbons_defaultCity');
+                if (saved) {
+                    const cityData = JSON.parse(saved);
+                    // Add to cities if not a built-in city
+                    if (!cities[cityData.key]) {
+                        cities[cityData.key] = cityData.data;
+                    }
+                    return cityData.key;
+                }
+            } catch (e) {
+                console.log('Could not load saved city:', e);
+            }
+            return 'baltimore';
+        }
+
+        function saveDefaultCity(cityKey) {
+            try {
+                const cityData = {
+                    key: cityKey,
+                    data: cities[cityKey]
+                };
+                localStorage.setItem('weatherRibbons_defaultCity', JSON.stringify(cityData));
+            } catch (e) {
+                console.log('Could not save default city:', e);
+            }
+        }
+
         // Current state
-        let currentCity = 'baltimore';
+        let currentCity = loadDefaultCity();
         let currentDayOffset = 0; // 0 = today, positive = future, negative = past
         const maxFutureOffset = 14; // Today + 14 days ahead (API limit)
         const historyBatchSize = 7; // Days to prefetch when going back in time
@@ -1909,9 +1963,11 @@
                 currentCity = cityKey;
                 currentDayOffset = 0; // Reset to today's view when changing location
 
-                // Restore label and refresh
-                restoreLabel(suggestion.name);
+                // Restore label first
+                restoreLabel(suggestion.name, false);
                 await refreshView();
+                // Show "set as default" option after refresh completes
+                showSetDefaultButton();
                 // Prefetch remaining days for new city
                 prefetchRemainingDays(cityKey);
             }
@@ -1991,6 +2047,30 @@
             if (label && cities[currentCity]) {
                 label.textContent = cities[currentCity].name;
             }
+        }
+
+        // Show "set as default" button below city label
+        function showSetDefaultButton() {
+            // Remove any existing set-default button
+            const existing = document.querySelector('.set-default-btn');
+            if (existing) existing.remove();
+
+            const cityLabel = document.getElementById('cityLabel');
+            const setDefaultBtn = document.createElement('span');
+            setDefaultBtn.className = 'set-default-btn';
+            setDefaultBtn.textContent = 'set as default';
+            setDefaultBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                saveDefaultCity(currentCity);
+                setDefaultBtn.textContent = 'saved!';
+                setTimeout(() => setDefaultBtn.remove(), 1500);
+            });
+            cityLabel.appendChild(setDefaultBtn);
+
+            // Auto-hide after 8 seconds if not clicked
+            setTimeout(() => {
+                if (setDefaultBtn.parentNode) setDefaultBtn.remove();
+            }, 8000);
         }
 
         // Handle day navigation
@@ -2297,10 +2377,18 @@
 
         // Start - show loading immediately and initialize
         document.getElementById('loadingOverlay').classList.add('visible');
+        updateCityLabel(); // Set initial city label from saved default
         refreshView().then(() => {
             // After initial view is loaded, prefetch remaining days in background
             prefetchRemainingDays(currentCity);
         });
+
+        // Auto-refresh every hour to keep weather data current
+        setInterval(() => {
+            console.log('Auto-refreshing weather data...');
+            currentDayOffset = 0; // Reset to current day
+            refreshView();
+        }, 60 * 60 * 1000); // 1 hour in milliseconds
     </script>
 </body>
 </html>
