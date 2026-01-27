@@ -134,7 +134,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 320px;
+            width: 400px;
             position: relative;
         }
 
@@ -270,7 +270,8 @@
         .day-label {
             color: rgba(235, 238, 245, 0.9);
             font-size: 0.9rem;
-            width: 180px;
+            width: 220px;
+            white-space: nowrap;
         }
         .day-label:hover { color: #fff; }
 
@@ -764,6 +765,7 @@
         let tempDisplayMin = 0;  // Will be updated when location changes
         let tempDisplayMax = 1;  // Will be updated when location changes
         let tempRangeCity = null; // Track which city the temp range was calculated for
+        let tempRangeBaseOffset = 0; // Track which day offset the temp range was calculated for
 
         // Map a normalized temperature (0-1) to display Y position fraction
         // Returns 0 at tempDisplayMin and 1 at tempDisplayMax
@@ -772,13 +774,17 @@
             return (tempValue - tempDisplayMin) / (tempDisplayMax - tempDisplayMin);
         }
 
-        // Calculate mean temperature across all forecast days for a location
-        async function calculateLocationTempRange(cityKey) {
+        // Calculate mean temperature across sample days for a location
+        // baseOffset: the day offset to center the calculation around (0 for today, -30 for 30 days ago, etc.)
+        async function calculateLocationTempRange(cityKey, baseOffset = 0) {
             let totalTemp = 0;
             let count = 0;
 
-            // Fetch temperature data for today and max future day (for faster loading)
-            const sampleDays = [0, maxFutureOffset];
+            // Fetch temperature data for baseOffset and baseOffset + maxFutureOffset (or just baseOffset for historical)
+            const sampleDays = baseOffset >= 0
+                ? [baseOffset, baseOffset + maxFutureOffset]
+                : [baseOffset, baseOffset + 14]; // For historical, sample 2 weeks ahead from base
+
             for (const day of sampleDays) {
                 try {
                     const dayData = await fetchWeatherData(cityKey, day);
@@ -803,8 +809,17 @@
                 const rangeAbove = 15 / 60;
                 tempDisplayMin = Math.max(0, meanTemp - rangeBelow);
                 tempDisplayMax = Math.min(1, meanTemp + rangeAbove);
-                console.log(`Temp range for ${cityKey}: mean=${((meanTemp * 60) - 25).toFixed(1)}°C, display range: ${((tempDisplayMin * 60) - 25).toFixed(1)}°C to ${((tempDisplayMax * 60) - 25).toFixed(1)}°C`);
+                tempRangeBaseOffset = baseOffset;
+                console.log(`Temp range for ${cityKey} (offset ${baseOffset}): mean=${((meanTemp * 60) - 25).toFixed(1)}°C, display range: ${((tempDisplayMin * 60) - 25).toFixed(1)}°C to ${((tempDisplayMax * 60) - 25).toFixed(1)}°C`);
             }
+        }
+
+        // Check if temp range needs recalculation based on day offset
+        function needsTempRangeRecalc(dayOffset) {
+            // Recalculate every 30 days when going back in time
+            const currentBucket = Math.floor(dayOffset / 30) * 30;
+            const rangeBucket = Math.floor(tempRangeBaseOffset / 30) * 30;
+            return currentBucket !== rangeBucket;
         }
 
         async function updateWeatherData(cityKey, dayOffset = 0) {
@@ -971,15 +986,18 @@
 
         // Refresh the current view
         async function refreshView() {
+            // Check if temp range needs recalculation
+            const needsTempRecalc = tempRangeCity !== currentCity || needsTempRangeRecalc(currentDayOffset);
             // Only show loading if data isn't already cached
-            const needsLoading = !isDataCached(currentCity, currentDayOffset) || tempRangeCity !== currentCity;
+            const needsLoading = !isDataCached(currentCity, currentDayOffset) || needsTempRecalc;
             if (needsLoading) {
                 showLoading();
             }
             try {
-                // Recalculate temperature display range when city changes
-                if (tempRangeCity !== currentCity) {
-                    await calculateLocationTempRange(currentCity);
+                // Recalculate temperature display range when city changes or every 30 days back
+                if (needsTempRecalc) {
+                    const baseOffset = Math.floor(currentDayOffset / 30) * 30;
+                    await calculateLocationTempRange(currentCity, baseOffset);
                     tempRangeCity = currentCity;
                 }
                 await updateWeatherData(currentCity, currentDayOffset);
@@ -1447,32 +1465,61 @@
         }
 
         // Temperature color mapping (global for tooltip use)
-        // Temperature colors: refined palette with better saturation
-        // white/ice → cool blue → teal → warm yellow → orange → deep red
+        // Temperature colors: refined palette
+        // white (freezing) → blue (cold) → yellow (mild) → orange (warm) → red (hot) → dark red (extreme)
         const tempColors = {
-            white: { r: 230, g: 240, b: 255 },   // Below 5°C - icy white-blue
-            blue: { r: 80, g: 160, b: 230 },     // 5°C to 10°C - cool blue
-            yellow: { r: 255, g: 220, b: 80 },   // 10°C to 20°C - warm golden
-            orange: { r: 255, g: 145, b: 70 },   // 20°C to 30°C - warm orange
-            red: { r: 235, g: 70, b: 55 }        // Above 30°C - vivid red
+            white: { r: 230, g: 240, b: 255 },      // <=0°C - icy white
+            blue: { r: 80, g: 160, b: 230 },        // 10°C - cool blue
+            yellow: { r: 255, g: 220, b: 80 },      // 20°C - warm golden
+            orange: { r: 255, g: 145, b: 70 },      // 30°C - warm orange
+            red: { r: 235, g: 70, b: 55 },          // 40°C - vivid red
+            darkRed: { r: 160, g: 30, b: 30 }       // >40°C - dark red
         };
         // Temperature thresholds (normalized: (temp + 25) / 60)
         const tempThresholds = {
-            five: (5 + 25) / 60,      // 5°C = 0.5
-            ten: (10 + 25) / 60,      // 10°C = 0.583
-            twenty: (20 + 25) / 60,   // 20°C = 0.75
-            thirty: (30 + 25) / 60    // 30°C = 0.917
+            minusTen: (-10 + 25) / 60,  // -10°C = 0.25
+            zero: (0 + 25) / 60,        // 0°C = 0.417
+            ten: (10 + 25) / 60,        // 10°C = 0.583
+            twenty: (20 + 25) / 60,     // 20°C = 0.75
+            thirty: (30 + 25) / 60,     // 30°C = 0.917
+            forty: (40 + 25) / 60       // 40°C = 1.083
         };
 
         function getTempColor(tempValue) {
-            const { white, blue, yellow, orange, red } = tempColors;
-            const { five, ten, twenty, thirty } = tempThresholds;
+            const { white, blue, yellow, orange, red, darkRed } = tempColors;
+            const { minusTen, zero, ten, twenty, thirty, forty } = tempThresholds;
 
-            if (tempValue < five) return white;
-            if (tempValue < ten) return lerpColor(white, blue, (tempValue - five) / (ten - five));
+            if (tempValue < zero) return white;  // <=0°C: solid white (dashed handled separately)
+            if (tempValue < ten) return lerpColor(white, blue, (tempValue - zero) / (ten - zero));
             if (tempValue < twenty) return lerpColor(blue, yellow, (tempValue - ten) / (twenty - ten));
             if (tempValue < thirty) return lerpColor(yellow, orange, (tempValue - twenty) / (thirty - twenty));
-            return lerpColor(orange, red, Math.min(1, (tempValue - thirty) / (1 - thirty)));
+            if (tempValue < forty) return lerpColor(orange, red, (tempValue - thirty) / (forty - thirty));
+            return darkRed;  // >40°C: solid dark red
+        }
+
+        // Check if temperature should be drawn dashed (below 0°C)
+        function isTempDashed(tempValue) {
+            return tempValue < tempThresholds.zero;
+        }
+
+        // Get dash pattern based on temperature (longer gaps as it gets colder)
+        // Returns [dashLength, gapLength] or null for continuous line
+        function getTempDashPattern(tempValue) {
+            const { zero, minusTen } = tempThresholds;
+            const minusOne = (-1 + 25) / 60;
+
+            if (tempValue >= minusOne) return null; // Continuous at 0°C to -1°C
+
+            // Calculate how far below -1°C (0 at -1°C, 1 at -10°C or below)
+            const coldness = Math.min(1, (minusOne - tempValue) / (minusOne - minusTen));
+
+            // Dash length stays constant, gap increases with coldness
+            const dashLength = 10;
+            const minGap = 4;   // Gap just below -1°C
+            const maxGap = 10;  // Gap at -10°C or below
+            const gapLength = minGap + coldness * (maxGap - minGap);
+
+            return [dashLength, gapLength];
         }
 
         function getDaylightBrightness(dayValue) {
@@ -1530,7 +1577,7 @@
                 curveData.push({ x, y, color, brightness, tempValue });
             }
 
-            // Draw filled area under curve
+            // Draw filled area under curve (continuous shading for all temps)
             curveData.forEach(d => {
                 const gradient = ctx.createLinearGradient(d.x, d.y, d.x, curveBottom);
                 for (let i = 0; i <= 8; i++) {
@@ -1543,25 +1590,68 @@
 
             // Draw curve layers (glow + line + highlight) in single pass per layer
             const layers = [
-                { width: 12, alpha: 0.08 },
-                { width: 6, alpha: 0.18 },
-                { width: 2.5, alpha: 0.85 },
-                { width: 1, alpha: 0.5, highlight: true }
+                { width: 8, alpha: 0.08 },
+                { width: 4, alpha: 0.18 },
+                { width: 2, alpha: 0.85 },
+                { width: 0.8, alpha: 0.5, highlight: true }
             ];
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
+
+            // Draw all curve segments with variable dash pattern based on temperature
+            // For temps >= 0°C: continuous line
+            // For temps < 0°C: dashed with gaps increasing as temperature decreases
             layers.forEach(layer => {
-                ctx.lineWidth = layer.width;
+                // Track dash state across the curve for smooth dashing
+                let dashOffset = 0;
+
                 for (let i = 0; i < curveData.length - 1; i++) {
                     const d1 = curveData[i], d2 = curveData[i + 1];
-                    const c = layer.highlight ? { r: Math.min(255, d1.color.r + 40), g: Math.min(255, d1.color.g + 40), b: Math.min(255, d1.color.b + 40) } : d1.color;
+                    const c = layer.highlight
+                        ? { r: Math.min(255, d1.color.r + 40), g: Math.min(255, d1.color.g + 40), b: Math.min(255, d1.color.b + 40) }
+                        : d1.color;
+
+                    // Apply brightness to both alpha and line width (thinner at night)
+                    const widthScale = 0.4 + 0.6 * d1.brightness;
+                    ctx.lineWidth = layer.width * widthScale;
                     ctx.strokeStyle = colorToString(c, layer.alpha * d1.brightness);
-                    ctx.beginPath();
-                    ctx.moveTo(d1.x, d1.y);
-                    ctx.lineTo(d2.x, d2.y);
-                    ctx.stroke();
+
+                    // Get dash pattern based on temperature
+                    const dashPattern = getTempDashPattern(d1.tempValue);
+
+                    if (dashPattern) {
+                        // Calculate segment length for dash offset tracking
+                        const segLength = Math.sqrt(Math.pow(d2.x - d1.x, 2) + Math.pow(d2.y - d1.y, 2));
+                        const [dashLen, gapLen] = dashPattern;
+                        const cycleLen = dashLen + gapLen;
+
+                        // Determine if we're in a dash or gap based on offset
+                        const posInCycle = dashOffset % cycleLen;
+                        const inDash = posInCycle < dashLen;
+
+                        if (inDash) {
+                            ctx.setLineDash([]);
+                            ctx.beginPath();
+                            ctx.moveTo(d1.x, d1.y);
+                            ctx.lineTo(d2.x, d2.y);
+                            ctx.stroke();
+                        }
+                        // Update dash offset for next segment
+                        dashOffset += segLength;
+                    } else {
+                        // Continuous line for temps >= 0°C
+                        ctx.setLineDash([]);
+                        ctx.beginPath();
+                        ctx.moveTo(d1.x, d1.y);
+                        ctx.lineTo(d2.x, d2.y);
+                        ctx.stroke();
+                        // Reset dash offset when returning to continuous
+                        dashOffset = 0;
+                    }
                 }
             });
+
+            ctx.setLineDash([]); // Reset dash pattern
 
             // Draw temperature reference line at noon
             // Shows the limited range (tempDisplayMin to tempDisplayMax) using the same color coding
@@ -1580,11 +1670,11 @@
                 const color = getTempColor(tempNorm);
 
                 ctx.fillStyle = colorToString(color, 0.3);
-                ctx.fillRect(refLineX, y, 0.5, 1.5);
+                ctx.fillRect(refLineX, y, 1, 1.5);
             }
 
-            // Add tick marks at 0°C and 40°C if within display range
-            const tickTemps = [0, 40];
+            // Add tick marks at -10°C, 0°C and 40°C if within display range
+            const tickTemps = [-10, 0, 40];
             tickTemps.forEach(tempC => {
                 const tempNorm = (tempC + 25) / 60;
                 if (tempNorm >= tempDisplayMin && tempNorm <= tempDisplayMax) {
