@@ -526,7 +526,7 @@
         <div class="day-selector">
             <button class="day-arrow" id="prevDay">&#8592;</button>
             <div class="day-selector-content">
-                <span class="city-label" id="cityLabel">Baltimore</span>
+                <span class="city-label" id="cityLabel">Tokyo</span>
                 <span class="day-label" id="dayLabel">Today</span>
             </div>
             <button class="day-arrow" id="nextDay">&#8594;</button>
@@ -537,6 +537,7 @@
     <script>
         // City coordinates for weather API
         const cities = {
+            'tokyo': { name: 'Tokyo', lat: 35.68, lon: 139.69, timezone: 'Asia/Tokyo' },
             'riyadh': { name: 'Riyadh', lat: 24.69, lon: 46.72, timezone: 'Asia/Riyadh' },
             'baltimore': { name: 'Baltimore', lat: 39.29, lon: -76.61, timezone: 'America/New_York' },
             'mexico-city': { name: 'Mexico City', lat: 19.43, lon: -99.13, timezone: 'America/Mexico_City' },
@@ -562,7 +563,7 @@
             } catch (e) {
                 console.log('Could not load saved city:', e);
             }
-            return 'baltimore';
+            return 'tokyo';
         }
 
         function saveDefaultCity(cityKey) {
