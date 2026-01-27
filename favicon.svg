@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="sky" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0f1428"/>
+      <stop offset="50%" stop-color="#64b4eb"/>
+      <stop offset="100%" stop-color="#0f1428"/>
+    </linearGradient>
+    <linearGradient id="temp" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4682c8"/>
+      <stop offset="100%" stop-color="#e66450"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" fill="#0d1117"/>
+  <rect x="4" y="8" width="24" height="6" rx="2" fill="url(#sky)"/>
+  <path d="M4 24 Q10 28, 16 22 Q22 16, 28 20" stroke="url(#temp)" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

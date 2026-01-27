@@ -1,6 +1,6 @@
 {
-  "name": "Clean Weather",
-  "short_name": "Weather",
+  "name": "Weather Flow",
+  "short_name": "Weather Flow",
   "description": "Beautiful weather visualization with flowing ribbons",
   "start_url": "./index.html",
   "display": "standalone",
