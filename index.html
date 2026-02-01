@@ -73,13 +73,12 @@
             position: fixed;
         }
 
-        /* On touch devices, everything in the wrapper scrolls together */
-        .touch-device .weather-display-wrapper .temp-tooltip,
-        .touch-device .weather-display-wrapper .sky-tooltip {
-            position: absolute;
+        /* On touch devices, hide tooltips and disable overlay to avoid interference with taps */
+        .touch-device .temp-tooltip,
+        .touch-device .sky-tooltip {
+            display: none !important;
         }
 
-        /* Disable temp overlay on touch devices to avoid interference with day navigation taps */
         .touch-device #tempCurveOverlay {
             pointer-events: none;
         }
