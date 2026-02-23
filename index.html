@@ -68,11 +68,12 @@
             z-index: 2;
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.8s ease-out;
+            transition: opacity 5s ease-in-out;
             cursor: crosshair;
         }
         #worldMapCanvas.visible {
             opacity: 1;
+            transition: opacity 0.8s ease-out;
             pointer-events: auto;
         }
 
@@ -156,9 +157,7 @@
         }
 
         .selector-divider {
-            width: 1px;
-            height: 20px;
-            background: rgba(255, 255, 255, 0.2);
+            display: none;
         }
 
         .location-section {
@@ -753,6 +752,8 @@
         let mapFadeTimeout = null;
         let mapClearTimeout = null;
         let currentMapBounds = null; // Stored for click-to-coordinate conversion
+        let currentMapLat = null;    // Last displayed dot latitude
+        let currentMapLon = null;    // Last displayed dot longitude
 
         // Fetch and decode TopoJSON country data (110m simplified from Natural Earth)
         async function fetchWorldMapData() {
@@ -888,6 +889,10 @@
             if (mapFadeTimeout) { clearTimeout(mapFadeTimeout); mapFadeTimeout = null; }
             if (mapClearTimeout) { clearTimeout(mapClearTimeout); mapClearTimeout = null; }
 
+            // Track current dot position for resize redraw
+            currentMapLat = cityLat;
+            currentMapLon = cityLon;
+
             const canvas = document.getElementById('worldMapCanvas');
             canvas.classList.remove('visible');
 
@@ -895,14 +900,19 @@
             const polygons = await fetchWorldMapData();
             if (!polygons) return;
 
-            // Size the map to match the sky ribbon width and wrapper height
+            // Size the map to match the sky ribbon width, preserving aspect ratio
             const wrapper = document.getElementById('weatherDisplayWrapper');
             const skyRibbonEl = document.getElementById('skyRibbon');
             const wrapperRect = wrapper.getBoundingClientRect();
             const skyRect = skyRibbonEl.getBoundingClientRect();
             const mapWidth = skyRect.width;
-            const mapHeight = wrapperRect.height || window.innerHeight * 0.5;
             const padding = 15;
+            // Correct aspect ratio: 360° longitude / 143° latitude (83°N to 60°S)
+            const mapAspect = 360 / (MAP_LAT_TOP - MAP_LAT_BOTTOM);
+            const innerWidth = mapWidth - padding * 2;
+            const idealHeight = innerWidth / mapAspect + padding * 2;
+            const maxHeight = wrapperRect.height || window.innerHeight * 0.5;
+            const mapHeight = Math.min(idealHeight, maxHeight);
 
             // Size canvas (retina)
             canvas.width = mapWidth * 2;
@@ -910,11 +920,15 @@
             canvas.style.width = mapWidth + 'px';
             canvas.style.height = mapHeight + 'px';
 
+            // Fit map bounds within canvas while preserving aspect ratio
+            const boundsHeight = mapHeight - padding * 2;
+            const boundsWidth = boundsHeight * mapAspect;
+            const boundsLeft = (mapWidth - boundsWidth) / 2;
             currentMapBounds = {
-                left: padding,
+                left: boundsLeft,
                 top: padding,
-                width: mapWidth - padding * 2,
-                height: mapHeight - padding * 2
+                width: boundsWidth,
+                height: boundsHeight
             };
 
             // Draw once (static, no animation)
@@ -936,14 +950,54 @@
             if (mapClearTimeout) clearTimeout(mapClearTimeout);
             mapFadeTimeout = setTimeout(() => {
                 canvas.classList.remove('visible');
-                currentMapBounds = null;
+                // Clean up after the 5s fade-out transition completes
                 mapClearTimeout = setTimeout(() => {
+                    currentMapBounds = null;
+                    currentMapLat = null;
+                    currentMapLon = null;
                     const ctx = canvas.getContext('2d');
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     canvas.style.width = '0';
                     canvas.style.height = '0';
-                }, 900);
+                }, 5500);
             }, delay);
+        }
+
+        // Resize the map if it's currently visible
+        function resizeWorldMap() {
+            const canvas = document.getElementById('worldMapCanvas');
+            if (!canvas.classList.contains('visible') || currentMapLat === null || !worldMapPolygons) return;
+
+            const wrapper = document.getElementById('weatherDisplayWrapper');
+            const skyRibbonEl = document.getElementById('skyRibbon');
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const skyRect = skyRibbonEl.getBoundingClientRect();
+            const mapWidth = skyRect.width;
+            const padding = 15;
+            const mapAspect = 360 / (MAP_LAT_TOP - MAP_LAT_BOTTOM);
+            const innerWidth = mapWidth - padding * 2;
+            const idealHeight = innerWidth / mapAspect + padding * 2;
+            const maxHeight = wrapperRect.height || window.innerHeight * 0.5;
+            const mapHeight = Math.min(idealHeight, maxHeight);
+
+            canvas.width = mapWidth * 2;
+            canvas.height = mapHeight * 2;
+            canvas.style.width = mapWidth + 'px';
+            canvas.style.height = mapHeight + 'px';
+
+            const boundsHeight = mapHeight - padding * 2;
+            const boundsWidth = boundsHeight * mapAspect;
+            const boundsLeft = (mapWidth - boundsWidth) / 2;
+            currentMapBounds = {
+                left: boundsLeft,
+                top: padding,
+                width: boundsWidth,
+                height: boundsHeight
+            };
+
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(2, 0, 0, 2, 0, 0);
+            drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds);
         }
 
         // Click on the map to select a location
@@ -960,6 +1014,10 @@
 
             // Clamp to valid range
             if (lat < MAP_LAT_BOTTOM || lat > MAP_LAT_TOP || lon < -180 || lon > 180) return;
+
+            // Track new dot position for resize redraw
+            currentMapLat = lat;
+            currentMapLon = lon;
 
             // Immediately redraw map with new dot position
             const mapWidth = rect.width;
@@ -2428,6 +2486,7 @@
             resizeTimer = setTimeout(() => {
                 resizeTimer = null;
                 draw();
+                resizeWorldMap();
             }, 200);
         });
 
