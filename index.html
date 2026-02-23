@@ -61,6 +61,20 @@
         }
         #tempCurveCanvas { z-index: 0; }
         #windCanvas { z-index: 1; }
+        #worldMapCanvas {
+            display: block;
+            margin: 0 auto;
+            position: relative;
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.8s ease-out;
+            cursor: crosshair;
+        }
+        #worldMapCanvas.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
 
         #tempCurveOverlay {
             position: absolute;
@@ -618,6 +632,7 @@
         </div>
     </div>
     <div class="swipe-indicator" id="swipeIndicator">tap left/right of sky to change day</div>
+    <canvas id="worldMapCanvas"></canvas>
 
     <script>
         // City coordinates for weather API
@@ -733,6 +748,251 @@
             { name: 'Andorra la Vella', lat: 42.51, lon: 1.52, timezone: 'Europe/Andorra' }
         ];
 
+        // ── World Map Overlay ──────────────────────────────────────────
+        let worldMapPolygons = null; // Cached decoded polygons
+        let mapFadeTimeout = null;
+        let mapClearTimeout = null;
+        let currentMapBounds = null; // Stored for click-to-coordinate conversion
+
+        // Fetch and decode TopoJSON country data (110m simplified from Natural Earth)
+        async function fetchWorldMapData() {
+            if (worldMapPolygons) return worldMapPolygons;
+            try {
+                const resp = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+                const topo = await resp.json();
+                worldMapPolygons = decodeTopoJSON(topo);
+                return worldMapPolygons;
+            } catch (e) {
+                console.error('Failed to fetch world map data:', e);
+                return null;
+            }
+        }
+
+        // Decode TopoJSON to arrays of [lon, lat] polygon rings
+        function decodeTopoJSON(topo) {
+            const { scale, translate } = topo.transform;
+            // Decode arcs: delta-encoded integers → absolute lon/lat
+            const arcs = topo.arcs.map(arc => {
+                let x = 0, y = 0;
+                return arc.map(([dx, dy]) => {
+                    x += dx; y += dy;
+                    return [x * scale[0] + translate[0], y * scale[1] + translate[1]];
+                });
+            });
+            // Extract polygon rings from country geometries
+            const countries = topo.objects.countries;
+            const polygons = [];
+            function extractGeometry(geom) {
+                if (geom.type === 'GeometryCollection') {
+                    geom.geometries.forEach(extractGeometry);
+                } else if (geom.type === 'Polygon') {
+                    geom.arcs.forEach(ring => polygons.push(resolveRing(ring)));
+                } else if (geom.type === 'MultiPolygon') {
+                    geom.arcs.forEach(poly => poly.forEach(ring => polygons.push(resolveRing(ring))));
+                }
+            }
+            function resolveRing(ring) {
+                const coords = [];
+                ring.forEach(idx => {
+                    const arc = idx < 0 ? [...arcs[~idx]].reverse() : arcs[idx];
+                    arc.forEach((pt, i) => {
+                        if (i > 0 || coords.length === 0) coords.push(pt);
+                    });
+                });
+                return coords;
+            }
+            extractGeometry(countries);
+            return polygons;
+        }
+
+        // Equirectangular projection: lon/lat → canvas x/y
+        // Clipped to 83°N – 60°S (excludes Antarctica)
+        const MAP_LAT_TOP = 83;
+        const MAP_LAT_BOTTOM = -60;
+        function projectGeo(lon, lat, mapBounds) {
+            const x = mapBounds.left + ((lon + 180) / 360) * mapBounds.width;
+            const y = mapBounds.top + ((MAP_LAT_TOP - lat) / (MAP_LAT_TOP - MAP_LAT_BOTTOM)) * mapBounds.height;
+            return { x, y };
+        }
+
+        // Reverse projection: canvas x/y → lon/lat
+        function unprojectGeo(x, y, mapBounds) {
+            const lon = ((x - mapBounds.left) / mapBounds.width) * 360 - 180;
+            const lat = MAP_LAT_TOP - ((y - mapBounds.top) / mapBounds.height) * (MAP_LAT_TOP - MAP_LAT_BOTTOM);
+            return { lon, lat };
+        }
+
+        // Reverse geocode coordinates to get a place name and timezone
+        async function reverseGeocode(lat, lon) {
+            try {
+                const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&accept-language=en`;
+                const resp = await fetch(url, { headers: { 'User-Agent': 'WeatherFlow/1.0' } });
+                const data = await resp.json();
+                const name = data.address.city || data.address.town || data.address.village
+                    || data.address.county || data.address.state || data.address.country || `${lat.toFixed(1)}°, ${lon.toFixed(1)}°`;
+                return name;
+            } catch (e) {
+                return `${lat.toFixed(1)}°, ${lon.toFixed(1)}°`;
+            }
+        }
+
+        // Draw the world map with country outlines and city marker
+        function drawWorldMap(ctx, polygons, cityLat, cityLon, mapBounds) {
+            // Draw country outlines only — skip Antarctica and anti-meridian artifacts
+            ctx.strokeStyle = 'rgba(100, 130, 180, 0.3)';
+            ctx.lineWidth = 0.5;
+            polygons.forEach(ring => {
+                if (ring.length < 3) return;
+                // Skip polygons entirely below -60° latitude (Antarctica)
+                const allSouth = ring.every(pt => pt[1] < -60);
+                if (allSouth) return;
+
+                ctx.beginPath();
+                const first = projectGeo(ring[0][0], ring[0][1], mapBounds);
+                ctx.moveTo(first.x, first.y);
+                for (let i = 1; i < ring.length; i++) {
+                    const p = projectGeo(ring[i][0], ring[i][1], mapBounds);
+                    // Break the path at anti-meridian crossings (huge longitude jumps)
+                    const lonJump = Math.abs(ring[i][0] - ring[i - 1][0]);
+                    if (lonJump > 90) {
+                        ctx.moveTo(p.x, p.y);
+                    } else {
+                        ctx.lineTo(p.x, p.y);
+                    }
+                }
+                ctx.stroke();
+            });
+
+            // City dot — colored by mean daytime temperature
+            const pos = projectGeo(cityLon, cityLat, mapBounds);
+            let dotColor = { r: 255, g: 200, b: 140 }; // fallback warm
+            if (fullWeatherData && fullWeatherData.daylight && fullWeatherData.temperature) {
+                let sum = 0, count = 0;
+                for (let i = 0; i < 24; i++) {
+                    if (fullWeatherData.daylight[i] > 0.5) {
+                        sum += fullWeatherData.temperature[i];
+                        count++;
+                    }
+                }
+                if (count > 0) dotColor = getTempColor(sum / count);
+            }
+            ctx.fillStyle = colorToString(dotColor, 0.9);
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Show the world map below the UI
+        async function showWorldMap(cityLat, cityLon) {
+            // Cancel any existing fade timers
+            if (mapFadeTimeout) { clearTimeout(mapFadeTimeout); mapFadeTimeout = null; }
+            if (mapClearTimeout) { clearTimeout(mapClearTimeout); mapClearTimeout = null; }
+
+            const canvas = document.getElementById('worldMapCanvas');
+            canvas.classList.remove('visible');
+
+            // Fetch map data (cached after first load)
+            const polygons = await fetchWorldMapData();
+            if (!polygons) return;
+
+            // Size the map to match the sky ribbon width and wrapper height
+            const wrapper = document.getElementById('weatherDisplayWrapper');
+            const skyRibbonEl = document.getElementById('skyRibbon');
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const skyRect = skyRibbonEl.getBoundingClientRect();
+            const mapWidth = skyRect.width;
+            const mapHeight = wrapperRect.height || window.innerHeight * 0.5;
+            const padding = 15;
+
+            // Size canvas (retina)
+            canvas.width = mapWidth * 2;
+            canvas.height = mapHeight * 2;
+            canvas.style.width = mapWidth + 'px';
+            canvas.style.height = mapHeight + 'px';
+
+            currentMapBounds = {
+                left: padding,
+                top: padding,
+                width: mapWidth - padding * 2,
+                height: mapHeight - padding * 2
+            };
+
+            // Draw once (static, no animation)
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(2, 0, 0, 2, 0, 0);
+            drawWorldMap(ctx, polygons, cityLat, cityLon, currentMapBounds);
+
+            // Fade in
+            canvas.offsetHeight; // force reflow
+            canvas.classList.add('visible');
+
+            // After 8 seconds, fade out
+            scheduleMapFadeOut(canvas);
+        }
+
+        // Schedule the map fade-out timer
+        function scheduleMapFadeOut(canvas, delay = 8000) {
+            if (mapFadeTimeout) clearTimeout(mapFadeTimeout);
+            if (mapClearTimeout) clearTimeout(mapClearTimeout);
+            mapFadeTimeout = setTimeout(() => {
+                canvas.classList.remove('visible');
+                currentMapBounds = null;
+                mapClearTimeout = setTimeout(() => {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    canvas.style.width = '0';
+                    canvas.style.height = '0';
+                }, 900);
+            }, delay);
+        }
+
+        // Click on the map to select a location
+        document.getElementById('worldMapCanvas').addEventListener('click', async (e) => {
+            if (!currentMapBounds || !worldMapPolygons) return;
+
+            const canvas = e.currentTarget;
+            const rect = canvas.getBoundingClientRect();
+            // CSS pixel coordinates (mapBounds uses CSS pixels, not retina)
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const { lon, lat } = unprojectGeo(x, y, currentMapBounds);
+
+            // Clamp to valid range
+            if (lat < MAP_LAT_BOTTOM || lat > MAP_LAT_TOP || lon < -180 || lon > 180) return;
+
+            // Immediately redraw map with new dot position
+            const mapWidth = rect.width;
+            const mapHeight = rect.height;
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(2, 0, 0, 2, 0, 0);
+            ctx.clearRect(0, 0, mapWidth, mapHeight);
+            drawWorldMap(ctx, worldMapPolygons, lat, lon, currentMapBounds);
+
+            // Reset fade-out timer (longer after click interaction)
+            scheduleMapFadeOut(canvas, 15000);
+
+            // Get place name via reverse geocoding (async, don't block UI)
+            const roundedLat = Math.round(lat * 100) / 100;
+            const roundedLon = Math.round(lon * 100) / 100;
+            const name = await reverseGeocode(roundedLat, roundedLon);
+
+            // Create a new city entry with auto timezone
+            const cityKey = name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now();
+            cities[cityKey] = {
+                name: name,
+                lat: roundedLat,
+                lon: roundedLon,
+                timezone: 'auto'
+            };
+            currentCity = cityKey;
+            currentDayOffset = 0;
+
+            // Update weather display (skip temp range recalc now; recalcs on day change)
+            await refreshView(true);
+            prefetchRemainingDays(cityKey);
+        });
+
         // Cache for fetched weather data (keyed by city-dayOffset)
         const weatherCache = {};
 
@@ -779,7 +1039,8 @@
         // Helper to get date string for a given offset from today in city's timezone
         function getDateForOffset(city, dayOffset) {
             const now = new Date();
-            const cityDateStr = now.toLocaleDateString('en-CA', { timeZone: city.timezone });
+            const opts = city.timezone && city.timezone !== 'auto' ? { timeZone: city.timezone } : {};
+            const cityDateStr = now.toLocaleDateString('en-CA', opts);
             const cityToday = new Date(cityDateStr + 'T00:00:00');
             const targetDate = new Date(cityToday);
             targetDate.setDate(targetDate.getDate() + dayOffset);
@@ -1848,23 +2109,52 @@
             // Position reference line at noon (center of the ribbon, same vertical range as curve)
             const refLineX = (ribbonLeft + ribbonRight) / 2;
             // Reference line spans full display height (0 to 1 in mapped space)
+            // Extended downward with a fade-out region
             const refLineTop = curveBottom - (1.0 * curveHeight * 0.8);  // Top of display range
             const refLineBottom = curveBottom - (0.0 * curveHeight * 0.8);  // Bottom of display range
+            const refFadeExtension = 40; // Extra pixels below to fade out
+            const refLineEnd = refLineBottom + refFadeExtension;
 
             // Draw the reference line pixel by pixel with temperature colors (very thin, dimmed)
-            for (let y = refLineTop; y < refLineBottom; y++) {
+            // Below 0°C: dashed with gaps increasing as it gets colder (matching temperature curve)
+            let refDashOffset = 0;
+            let prevDashPattern = null;
+            for (let y = refLineTop; y < refLineEnd; y++) {
                 // Map y position to temperature (top = hot, bottom = cold)
                 const t = (y - refLineTop) / (refLineBottom - refLineTop);
                 // Map from display position (0-1) back to actual temperature
                 const tempNorm = tempDisplayMax - t * (tempDisplayMax - tempDisplayMin);
                 const color = getTempColor(tempNorm);
 
-                ctx.fillStyle = colorToString(color, 0.3);
-                ctx.fillRect(refLineX, y, 1, 1.5);
+                const dashPattern = getTempDashPattern(tempNorm);
+                // Reset dash offset when transitioning between continuous and dashed
+                if ((dashPattern === null) !== (prevDashPattern === null)) {
+                    refDashOffset = 0;
+                }
+                prevDashPattern = dashPattern;
+
+                if (dashPattern) {
+                    // Shorter dashes for the reference bar
+                    const dashLen = 5;
+                    const gapLen = dashPattern[1];
+                    const posInCycle = refDashOffset % (dashLen + gapLen);
+                    refDashOffset++;
+                    if (posInCycle >= dashLen) continue; // In gap, skip this pixel
+                }
+
+                // Fade out smoothly in the extension region below the display range
+                let alpha = 0.3;
+                if (y > refLineBottom) {
+                    const fadeT = (y - refLineBottom) / refFadeExtension;
+                    alpha *= 0.5 * (1 + Math.cos(fadeT * Math.PI)); // Cosine fade to 0
+                }
+
+                ctx.fillStyle = colorToString(color, alpha);
+                ctx.fillRect(refLineX, y, 1.5, 1.5);
             }
 
-            // Add tick marks at -10°C, 0°C and 40°C if within display range
-            const tickTemps = [-10, 0, 40];
+            // Add tick marks at 0°C and 40°C if within display range
+            const tickTemps = [0, 40];
             tickTemps.forEach(tempC => {
                 const tempNorm = (tempC + 25) / 60;
                 if (tempNorm >= tempDisplayMin && tempNorm <= tempDisplayMax) {
@@ -1881,12 +2171,9 @@
                 const city = cities[currentCity];
                 const now = new Date();
                 // Get current hour and minute in the city's timezone
-                const timeStr = now.toLocaleTimeString('en-US', {
-                    timeZone: city.timezone,
-                    hour12: false,
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+                const timeOpts = { hour12: false, hour: '2-digit', minute: '2-digit' };
+                if (city.timezone && city.timezone !== 'auto') timeOpts.timeZone = city.timezone;
+                const timeStr = now.toLocaleTimeString('en-US', timeOpts);
                 const [hours, minutes] = timeStr.split(':').map(Number);
                 const currentHour = hours + minutes / 60;
 
@@ -1994,7 +2281,7 @@
                         length: 30 + Math.random() * 50,
                         phase: Math.random() * Math.PI * 2, // Animation phase offset
                         speed: 0.5 + Math.random() * 1.5, // Animation speed
-                        opacity: 0.15 + Math.random() * 0.25,
+                        opacity: 0.25 + Math.random() * 0.35,
                         seed: Math.random() * 1000
                     });
                 }
@@ -2078,7 +2365,7 @@
                 // Fade based on distance from temperature curve
                 const distFromCurve = streak.baseY * 0.3;
                 const distanceFade = Math.max(0, 1 - distFromCurve / 30);
-                const alpha = streak.opacity * windIntensity * (0.6 + dayValue * 0.4) * 2.5 * distanceFade * shimmer;
+                const alpha = streak.opacity * windIntensity * (0.7 + dayValue * 0.3) * 4.5 * distanceFade * shimmer;
 
                 // Skip if too faint
                 if (alpha < 0.02) return;
@@ -2128,13 +2415,20 @@
         function draw() {
             // Draw sky ribbon first so its dimensions are available for temperature curve positioning
             drawSkyRibbon();
+            // Force layout reflow so getBoundingClientRect returns updated dimensions
+            document.getElementById('skyRibbon').getBoundingClientRect();
             drawTemperatureCurve();
             startWindAnimation();
         }
 
-        // Handle resize
+        // Handle resize with debounce
+        let resizeTimer = null;
         window.addEventListener('resize', () => {
-            setTimeout(draw, 100);
+            if (resizeTimer) clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                resizeTimer = null;
+                draw();
+            }, 200);
         });
 
         // Fetch city suggestions from geocoding API
@@ -2400,8 +2694,10 @@
 
             // Skip temp range recalculation to keep the temperature bar unchanged
             await refreshView(true);
-            showSetDefaultButton();
             prefetchRemainingDays(cityKey);
+
+            // Show world map overlay with the chosen city
+            showWorldMap(randomCapital.lat, randomCapital.lon);
         });
 
         // Handle keyboard navigation for days
