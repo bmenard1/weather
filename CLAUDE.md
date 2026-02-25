@@ -1,66 +1,228 @@
-# Weather Ribbons
+# Weather Flow
 
-## Project Overview
+## What This Is
 
-Weather Ribbons is an artistic weather visualization project that displays daily weather data as flowing, colorful ribbon graphics. Built with vanilla HTML5, CSS, and JavaScript using Canvas API.
+Weather Flow is an artistic weather visualization that renders a full day's weather as a horizontal panoramic painting. Time flows left to right. There are no weather icons, no dashboards — just a sky ribbon, a temperature curve, and subtle atmospheric effects. It's designed to feel like watching the day pass through a window.
 
-## Tech Stack
+Single-file vanilla app (`index.html`, ~3550 lines). No frameworks, no build step. Open in a browser.
 
-- **HTML5 Canvas** - All visualizations rendered via 2D canvas context
-- **Vanilla JavaScript** - No frameworks or dependencies
-- **CSS3** - Modern styling with gradients, flexbox, and shadows
-
-## Project Structure
+## File Structure
 
 ```
-ribbons/
-├── weather-viz-3-ribbons-v2.html  # Earlier iteration
-├── weather-viz-3-ribbons-v3.html  # Intermediate version
-└── weather-viz-3-ribbons-v4.html  # Current/latest version (use this)
+weather flow/
+├── index.html          # The entire app (HTML + CSS + JS, single file)
+├── favicon.svg         # SVG favicon: sky ribbon + temperature curve
+├── manifest.json       # PWA manifest
+├── sw.js               # Service worker for offline/PWA
+├── icon-192.png        # PWA icon 192×192
+├── icon-512.png        # PWA icon 512×512
+├── CLAUDE.md           # This file
+├── notes.txt           # Scratch notes
+└── OLD/                # Earlier iterations (not used)
 ```
 
-## Key Concepts
+## Visual Layers (top to bottom)
 
-### Weather Data Format
-Data is stored as 24-element arrays (one value per hour, 0=midnight to 23=11pm):
-- `daylight`: 0-1 (0=night, 1=full day)
-- `clouds`: 0-1 (0=clear, 1=overcast)
-- `rain`: 0-1 (0=dry, 1=heavy rain)
-- `temperature`: 0-1 (normalized, 0=coldest, 1=warmest)
+### 1. Sky Ribbon (canvas: `#skyRibbon`)
 
-### Visualization Components
-1. **Sky Ribbon** - Shows day/night cycle, clouds, stars, and rain with dynamic height
-2. **Temperature Ribbon** - Color gradient from cool blues to warm oranges/reds
+A wide horizontal ribbon rendered column-by-column. Composited layers:
 
-### Core Functions
-- `interpolateData()` - Smooth cubic interpolation between hourly data points
-- `getSkyColor()` - Returns gradient colors based on daylight value
-- `drawSkyRibbon()` - Renders sky with stars, clouds, rain
-- `drawTemperatureRibbon()` - Renders temperature flow with shimmer/mist effects
+- **Sky gradient** — transitions through night (deep blue-black `#0f1428`), twilight (purple), dawn/dusk (orange-pink), midday (cerulean `#64b4eb` to pale `#a0d2fa`). Driven by daylight value per column.
+- **Cloud layer** — radial puff textures at top of ribbon. Brightness shifts: dark at night, bright white during day, orange-tinted at dawn/dusk. Alpha driven by cloud cover with cosine smoothing.
+- **Night darkening** — dark blue-black wash that strengthens at night, fades near sunrise.
+- **Stars** — 400 pre-seeded dots (deterministic via sin-hash noise). Fade in at night, fade out through clouds. Palette: white, warm yellow, cool blue, reddish.
+- **Rain** — 4 parallax depth layers of gradient streaks falling from clouds. Angled ~10-12° for wind feel. Rain extends the ribbon height dynamically.
+- **Snow** — 4 parallax layers of radial-gradient glowing dots with sine-wave lateral drift. Mutually exclusive with rain per column.
 
-## Development Notes
+The ribbon is cropped at the top (hides upper 55% where cloud puffs live), showing only the lower sky gradient. This creates a clean horizon-like edge.
 
-- Visualizations are static (no animation loop) - rendered once on load
-- Uses `noise()` function for organic randomness
-- Canvas is rendered at 2x resolution for Retina displays
-- Stars are pre-generated for consistent positions across redraws
-- Rain dynamically extends the sky ribbon height based on intensity
+**Dimensions**: `fullBaseHeight = 240`, crop 55%, plus up to `precipExtensionHeight = 200` for rain/snow overflow.
 
-## Color Palettes
+### 2. Temperature Curve (canvas: `#tempCurveCanvas`)
 
-**Sky colors** transition through:
-- Night: dark blue (#0f1428 to #19233f)
-- Twilight: purple (#3c325a to #5a466e)
-- Dawn/Dusk: orange/pink (#ff8c64 to #ffb48c)
-- Day: sky blue (#64b4eb to #a0d2fa)
+A flowing colored spline curve drawn on a full-viewport canvas positioned behind the sky ribbon.
 
-**Temperature colors**:
-- Cold: #4682c8 (blue)
-- Cool: #82beea (light blue)
-- Mild: #fadc8c (yellow)
-- Warm: #f5a05a (orange)
-- Hot: #e66450 (red)
+- **Interpolation**: Catmull-Rom spline on full 24-hour data (avoids edge flattening at display boundaries).
+- **Color per pixel**: icy white (≤0°C) → blue (10°C) → golden yellow (20°C) → orange (30°C) → red (40°C) → dark red (50°C) → deep maroon (>50°C).
+- **Below 0°C**: curve becomes dashed, gap length increasing as temperature drops further.
+- **Fill**: semi-transparent gradient wash flowing down from curve to baseline, fading with power curve.
+- **Glow layers**: 4 passes — 8px outer glow, 4px medium, 2px main line, 0.8px bright highlight. All fade at night.
+- **Reference bar**: vertical color-coded tick mark at noon showing the display temperature range, with marks at 0°C and 40°C.
+- **Current time marker**: white downward triangle above sky ribbon, today only.
 
-## Running Locally
+**Adaptive range**: fetches samples from start/end of forecast period, calculates mean, sets visible range to mean −15°C / mean +22.5°C. This zooms the curve for tropical, arctic, or temperate cities.
 
-Open any HTML file directly in a browser. No build step or server required.
+### 3. Wind Animation (canvas: `#windCanvas`, RAF loop)
+
+The only continuously animated layer.
+
+- White horizontal tapered streaks above the temperature curve.
+- Only visible when wind > ~16 km/h (`WIND_THRESHOLD = 0.2`).
+- 40 columns × 2 streaks each. Opacity pulses via sine wave (shimmer).
+- Clipped by distance from temperature curve — only appear in a band just above it.
+
+### 4. World Map Overlay (canvas: `#worldMapCanvas`)
+
+- TopoJSON equirectangular world map (Natural Earth 110m via jsDelivr CDN).
+- Appears on Random click or map interaction. Fades in 0.8s, auto-fades out after 8s (15s if clicked).
+- Country outlines in subtle blue-gray. Colored dot at current city (color = mean daytime temperature).
+- **Clickable**: click anywhere → reverse geocode via Nominatim → load that location's weather. Remains clickable throughout the 5s fade-out via inline `pointer-events: auto` override.
+- Clipped to 83°N–60°S (excludes Antarctica). Anti-meridian artifacts filtered.
+
+### 5. Year Temperature Band (canvas: `#yearBandCanvas`)
+
+A thin horizontal color strip below the day selector showing the mean midday temperature (noon ± 3h, hours 9–15) for every day of the current year.
+
+- **Visibility**: hidden by default on desktop. Appears (0.8s fade-in) when mouse hovers directly over the band area. Stays visible while cursor is on the band. When cursor moves away, remains visible for 10 seconds, then fades out over 5s (same pattern as world map). Remains clickable during fade-out. On touch devices, always visible.
+- **3 data tiers** (all use `hourly=temperature_2m`, temp averaged over hours 9–15):
+  - **Tier 1 — Past** (Jan 1 → yesterday): archive API
+  - **Tier 2 — Forecast** (today → +14 days): forecast API
+  - **Tier 3 — Last-year fill** (remaining days → Dec 31): archive API for same dates last year
+- All tiers rendered at 0.35 base alpha.
+- **Data per entry**: `{ date, tempC, tier, daylightFrac }` — daylightFrac computed via astronomical formula from latitude + day-of-year (handles polar regions smoothly, no API dependency)
+- **Rendering**: each day = one vertical color slice, color via `getTempColor((tempC + 25) / 60)`
+- **Daylight-aware fade**: each slice has a per-column vertical gradient — bright center (daylight zone) fading to transparent at both edges (night zone). Width of bright portion = `daylightFrac` (amplified 2.5× from 0.5 midpoint for stronger visual contrast). Summer days appear thick, winter days thin, creating a visible daylight envelope across the year.
+- **Today marker**: small triangle below band, pointing up
+- **Viewed day marker**: dashed white line when navigating away from today
+- **Click**: navigates to that day (past only or within forecast range)
+- **Hover tooltip** (desktop): shows "Mon Day · X.X°C" with colored temperature + "(last year)" for tier 3
+- **Caching**: `yearBandCache` keyed by `cityKey`. Refetched on city change.
+- **Height**: 18px desktop, 16px tablet, 14px phone. Pill-shaped (border-radius).
+- **Functions**: `fetchYearBandData(cityKey)`, `drawYearBand()`, `initYearBandInteraction()`, `initYearBandHover()`, `showYearBand()`, `scheduleYearBandFadeOut()`
+
+## Data & APIs
+
+**Open-Meteo** (free, no key):
+- Forecast: `api.open-meteo.com/v1/forecast` — today + 14 days, recent past (within 5 days)
+- Archive: `archive-api.open-meteo.com/v1/archive` — historical (>5 days ago)
+- Hourly params: `temperature_2m`, `cloud_cover`, `rain`, `snowfall`, `precipitation`, `precipitation_probability`, `wind_speed_10m`, `wind_direction_10m`, `is_day`
+- Daily: `sunrise`, `sunset` (main weather fetch only; year band uses astronomical formula instead)
+- Timezone per city for local time alignment.
+
+**Open-Meteo Geocoding**: `geocoding-api.open-meteo.com/v1/search` — city autocomplete (debounced 300ms, 5 results).
+
+**Nominatim** (OpenStreetMap): reverse geocoding for map click → place name.
+
+### Normalization
+
+| Field | Raw | Normalized 0–1 |
+|-------|-----|-----------------|
+| `daylight` | computed from sunrise/sunset | 0=night, 1=full day (cosine transitions, 1.5h dawn/dusk) |
+| `clouds` | 0–100% | divided by 100 |
+| `rain` | mm/h | capped at 10mm = 1.0 |
+| `snow` | cm/h | capped at 5cm = 1.0 |
+| `temperature` | °C | `(temp + 25) / 60` unclamped (range extends beyond 1.0; color ramp covers up to 50°C+) |
+| `windSpeed` | km/h | capped at 80 km/h = 1.0 |
+
+### Caching
+
+- In-memory `weatherCache` keyed by `cityKey-dateString`.
+- In-memory `yearBandCache` keyed by `cityKey` (365-entry array of `{date, tempC, tier, daylightFrac}`).
+- Prefetches full 14-day forecast in batches of 3 after initial load.
+- Prefetches past days in batches of 7 when navigating backward.
+
+## Interactive Features
+
+### Day Navigation
+- Arrow buttons (hidden on touch → tap left/right third of sky ribbon).
+- Keyboard: ← / → arrow keys.
+- Click day label → jump to today.
+- Unlimited past history (archive API). Up to 14 days ahead.
+- Label format: "Today", "Tomorrow Wednesday", "Yesterday Tuesday", "Wednesday Feb 26", etc. Year shown if not current.
+
+### City Selection
+- Click city label → live autocomplete input (geocoding API).
+- Type ≥2 chars → debounced suggestions with state/country detail.
+- Enter auto-picks top result. Escape cancels.
+- "set as default" link appears after picking a city → saves to `localStorage`.
+
+### Random Button
+- Picks a random world capital (~90 cities, all continents).
+- Shows world map overlay with city dot.
+
+### Tooltips (desktop only, hidden on touch)
+- **Sky ribbon**: hour, cloud %, precipitation mm/cm, sunrise/sunset time near those events.
+- **Temperature curve**: hour, °C (color-coded), wind km/h if >15.
+
+## Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `interpolateData(data, t)` | Smoothstep interpolation for most data arrays |
+| `interpolateDataSmooth(data, t, useFullTemp)` | Catmull-Rom spline. When `useFullTemp=true`, uses full 24h temperature for edge smoothness |
+| `getSkyColor(dayValue, cloudValue)` | Returns `{top, bottom}` gradient colors for sky |
+| `getTempColor(tempValue)` | Returns `{r,g,b}` for normalized temperature |
+| `drawSkyRibbon()` | Renders entire sky ribbon (static, one-shot) |
+| `drawTemperatureCurve()` | Renders temperature curve + reference bar + time marker (static) |
+| `drawWindAnimation(timestamp)` | RAF loop for wind streaks |
+| `showWorldMap(lat, lon)` | Renders + fades world map overlay |
+| `fetchYearBandData(cityKey)` | 3 API calls → merged 365-entry array `{date, tempC, tier, daylightFrac}` |
+| `drawYearBand()` | Canvas rendering of year band with color slices + daylight gradient + markers |
+| `initYearBandInteraction()` | Sets up click (navigate) + hover (tooltip) on year band |
+| `initYearBandHover()` | Desktop auto-show/hide: mousemove detection, 10s timer, 5s fade-out |
+| `showYearBand()` | Shows year band (cancels pending fade, adds `.visible`) |
+| `scheduleYearBandFadeOut()` | Schedules 10s delay → remove `.visible` → 5s fade → cleanup |
+| `refreshView(skipTempRangeRecalc)` | Main entry: fetch data → update → draw all |
+| `draw()` | Calls `drawSkyRibbon()` → reflow → `drawTemperatureCurve()` → `drawYearBand()` → `startWindAnimation()` |
+| `noise(x, y, seed)` | Sin-hash pseudo-random for organic textures |
+| `mapTempToDisplayRange(tempValue)` | Maps normalized temp to 0–1 within adaptive display range |
+
+## UI Architecture
+
+```
+body (dark gradient background #0d1117 → #0f1a2e)
+└── .weather-display-wrapper (relative container for all canvases)
+    ├── #loadingOverlay (shimmer skeleton, shown during fetches)
+    ├── #tempCurveCanvas (full viewport, z-index: 0)
+    ├── #windCanvas (full viewport, z-index: 1, animated)
+    ├── #tempCurveOverlay (invisible hit area for temp tooltips, z-index: 10)
+    ├── .temp-tooltip (fixed position, follows mouse)
+    ├── .container
+    │   └── .ribbon-row → .ribbon-wrapper.dynamic-height
+    │       └── #skyRibbon canvas (pill-shaped, border-radius: 50px top)
+    ├── .sky-tooltip (fixed position, follows mouse)
+    └── .day-selector (absolute bottom)
+        └── .day-selector-content (flex row)
+            ├── .date-nav (← Today →)
+            └── .location-section (city label + random btn)
+└── .year-band-container (below wrapper)
+    ├── #yearBandCanvas (full-year color strip, clickable)
+    └── .year-band-tooltip (fixed position, follows mouse)
+└── #swipeIndicator ("tap left/right of sky to change day", touch only)
+└── #worldMapCanvas (below wrapper, fades in/out)
+```
+
+## Rendering Details
+
+- All canvases rendered at 2× for Retina (`canvas.width = w*2; ctx.scale(2,2)`).
+- Sky ribbon drawn column-by-column (per-pixel-column compositing).
+- Temperature curve drawn segment-by-segment for per-pixel color + dash control.
+- Display range crops 2h before sunrise to 2h after sunset (not full 24h).
+- Wind is the only RAF animation. Everything else renders once on `draw()`.
+- Resize handler debounced at 200ms → redraws all + resizes map if visible.
+
+## Responsive Design
+
+Three breakpoints:
+- **Desktop** (>768px): full layout, tooltips active, arrow buttons visible.
+- **Tablet** (≤768px): reduced spacing, smaller fonts, 80px ribbon height.
+- **Phone portrait** (≤480px portrait): day selector moves below ribbon (relative positioning), horizontal layout with date-nav left / city right. Arrows hidden, tap navigation.
+- **Phone landscape** (≤480px landscape): compact spacing, smaller fonts.
+
+Touch devices: arrows hidden, tap left/right third of sky to navigate days. Tooltips disabled.
+
+## PWA
+
+- `manifest.json` with 192 and 512 icons.
+- `sw.js` service worker for offline support.
+- Apple mobile web app meta tags with black-translucent status bar.
+- Theme color: `#0d1117`.
+
+## Style Notes
+
+- All UI chrome is ghostly: nearly transparent backgrounds, hairline borders, muted silver-white text.
+- Font: system UI (`Segoe UI`, Tahoma, etc.), always small and light.
+- Buttons: `rgba(255,255,255,0.06)` background, `rgba(255,255,255,0.08)` border, 12px border-radius.
+- Loading: shimmer skeleton with traveling gradient, 1.5s ease-in-out infinite animation.
+- Transitions: 0.25s ease on all interactive elements.
+- Auto-refreshes weather data every hour.

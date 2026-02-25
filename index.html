@@ -328,6 +328,47 @@
         }
         .day-label:hover { color: #fff; }
 
+        /* Year temperature band */
+        .year-band-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 4px auto 0;
+            height: 18px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 5s ease-in-out;
+            pointer-events: none;
+            position: relative;
+            z-index: 5;
+        }
+        .year-band-container.visible {
+            opacity: 1;
+            transition: opacity 0.8s ease-out;
+            pointer-events: auto;
+        }
+        #yearBandCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .year-band-tooltip {
+            position: fixed;
+            background: rgba(8, 12, 20, 0.85);
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            pointer-events: none;
+            z-index: 100;
+            display: none;
+            transform: translate(-50%, -100%);
+            margin-top: -8px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
+        }
+
         .temp-tooltip, .sky-tooltip {
             background: rgba(8, 12, 20, 0.85);
             color: #fff;
@@ -405,6 +446,10 @@
             .ribbon-wrapper.dynamic-height {
                 min-height: 80px;
             }
+
+            .year-band-container {
+                height: 16px;
+            }
         }
 
         /* Portrait smartphone layout */
@@ -463,6 +508,11 @@
 
             .selector-divider {
                 display: none;
+            }
+
+            .year-band-container {
+                height: 14px;
+                margin: 4px 5px 0;
             }
         }
 
@@ -622,13 +672,16 @@
                     <span class="day-label" id="dayLabel">Today</span>
                     <button class="day-arrow" id="nextDay">&#8594;</button>
                 </div>
-                <span class="selector-divider"></span>
                 <div class="location-section">
                     <span class="city-label" id="cityLabel">Tokyo</span>
                     <button class="random-btn" id="randomBtn">random</button>
                 </div>
             </div>
         </div>
+    </div>
+    <div class="year-band-container" id="yearBandContainer">
+        <canvas id="yearBandCanvas"></canvas>
+        <div class="year-band-tooltip" id="yearBandTooltip"></div>
     </div>
     <div class="swipe-indicator" id="swipeIndicator">tap left/right of sky to change day</div>
     <canvas id="worldMapCanvas"></canvas>
@@ -937,8 +990,10 @@
             drawWorldMap(ctx, polygons, cityLat, cityLon, currentMapBounds);
 
             // Fade in
+            canvas.style.pointerEvents = '';
             canvas.offsetHeight; // force reflow
             canvas.classList.add('visible');
+            showYearBand();
 
             // After 8 seconds, fade out
             scheduleMapFadeOut(canvas);
@@ -949,9 +1004,12 @@
             if (mapFadeTimeout) clearTimeout(mapFadeTimeout);
             if (mapClearTimeout) clearTimeout(mapClearTimeout);
             mapFadeTimeout = setTimeout(() => {
+                // Keep clickable during the 5s fade-out
+                canvas.style.pointerEvents = 'auto';
                 canvas.classList.remove('visible');
                 // Clean up after the 5s fade-out transition completes
                 mapClearTimeout = setTimeout(() => {
+                    canvas.style.pointerEvents = '';
                     currentMapBounds = null;
                     currentMapLat = null;
                     currentMapLon = null;
@@ -959,6 +1017,8 @@
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     canvas.style.width = '0';
                     canvas.style.height = '0';
+                    // Map fully gone — start year band fade
+                    scheduleYearBandFadeOut();
                 }, 5500);
             }, delay);
         }
@@ -1048,11 +1108,16 @@
 
             // Update weather display (skip temp range recalc now; recalcs on day change)
             await refreshView(true);
+            showYearBand();
             prefetchRemainingDays(cityKey);
         });
 
         // Cache for fetched weather data (keyed by city-dayOffset)
         const weatherCache = {};
+
+        // Year band data cache (keyed by cityKey)
+        const yearBandCache = {};
+        let yearBandCity = null; // Track which city the current band is for
 
         // Load saved default city from localStorage
         function loadDefaultCity() {
@@ -1187,9 +1252,9 @@
                 // Keep raw snow values (cm) for display
                 const snowCm = data.hourly.snowfall;
 
-                // Normalize temperature (-25°C to 35°C -> 0 to 1)
+                // Normalize temperature (-25°C to 50°C+ -> 0 to 1.25)
                 const temperature = data.hourly.temperature_2m.map(t => {
-                    return Math.max(0, Math.min(1, (t + 25) / 60));
+                    return Math.max(0, (t + 25) / 60);
                 });
 
                 // Get precipitation probability (0-100%) - keep hourly array
@@ -1512,6 +1577,12 @@
                 await updateWeatherData(currentCity, currentDayOffset);
                 updateDayLabel();
                 draw();
+
+                // Fetch year band data when city changes (non-blocking)
+                if (yearBandCity !== currentCity) {
+                    yearBandCity = currentCity;
+                    fetchYearBandData(currentCity).then(() => drawYearBand());
+                }
             } finally {
                 if (needsLoading) {
                     hideLoading();
@@ -1982,7 +2053,8 @@
             yellow: { r: 255, g: 220, b: 80 },      // 20°C - warm golden
             orange: { r: 255, g: 145, b: 70 },      // 30°C - warm orange
             red: { r: 235, g: 70, b: 55 },          // 40°C - vivid red
-            darkRed: { r: 160, g: 30, b: 30 }       // >40°C - dark red
+            darkRed: { r: 160, g: 30, b: 30 },      // 50°C - dark red
+            deepMaroon: { r: 90, g: 10, b: 40 }     // >50°C - deep maroon
         };
         // Temperature thresholds (normalized: (temp + 25) / 60)
         const tempThresholds = {
@@ -1991,19 +2063,21 @@
             ten: (10 + 25) / 60,        // 10°C = 0.583
             twenty: (20 + 25) / 60,     // 20°C = 0.75
             thirty: (30 + 25) / 60,     // 30°C = 0.917
-            forty: (40 + 25) / 60       // 40°C = 1.083
+            forty: (40 + 25) / 60,      // 40°C = 1.083
+            fifty: (50 + 25) / 60       // 50°C = 1.25
         };
 
         function getTempColor(tempValue) {
-            const { white, blue, yellow, orange, red, darkRed } = tempColors;
-            const { minusTen, zero, ten, twenty, thirty, forty } = tempThresholds;
+            const { white, blue, yellow, orange, red, darkRed, deepMaroon } = tempColors;
+            const { minusTen, zero, ten, twenty, thirty, forty, fifty } = tempThresholds;
 
             if (tempValue < zero) return white;  // <=0°C: solid white (dashed handled separately)
             if (tempValue < ten) return lerpColor(white, blue, (tempValue - zero) / (ten - zero));
             if (tempValue < twenty) return lerpColor(blue, yellow, (tempValue - ten) / (twenty - ten));
             if (tempValue < thirty) return lerpColor(yellow, orange, (tempValue - twenty) / (thirty - twenty));
             if (tempValue < forty) return lerpColor(orange, red, (tempValue - thirty) / (forty - thirty));
-            return darkRed;  // >40°C: solid dark red
+            if (tempValue < fifty) return lerpColor(red, darkRed, (tempValue - forty) / (fifty - forty));
+            return deepMaroon;  // >50°C: deep maroon
         }
 
         // Check if temperature should be drawn dashed (below 0°C)
@@ -2211,8 +2285,8 @@
                 ctx.fillRect(refLineX, y, 1.5, 1.5);
             }
 
-            // Add tick marks at 0°C and 40°C if within display range
-            const tickTemps = [0, 40];
+            // Add tick marks at key temperatures if within display range
+            const tickTemps = [0, 10, 20, 40];
             tickTemps.forEach(tempC => {
                 const tempNorm = (tempC + 25) / 60;
                 if (tempNorm >= tempDisplayMin && tempNorm <= tempDisplayMax) {
@@ -2346,6 +2420,7 @@
             }
         }
 
+
         // Draw animated wind streaks
         function drawWindAnimation(timestamp) {
             const canvas = document.getElementById('windCanvas');
@@ -2469,6 +2544,433 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
 
+        // ===== Year Temperature Band =====
+
+        // Fetch year band data: 3 API calls merged into a 365/366 entry array
+        async function fetchYearBandData(cityKey) {
+            if (yearBandCache[cityKey]) return yearBandCache[cityKey];
+
+            const city = cities[cityKey];
+            if (!city) return null;
+
+            const now = new Date();
+            const tz = city.timezone && city.timezone !== 'auto' ? city.timezone : 'UTC';
+            const cityDateStr = now.toLocaleDateString('en-CA', { timeZone: tz });
+            const cityToday = new Date(cityDateStr + 'T00:00:00');
+            const year = cityToday.getFullYear();
+            const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+            const daysInYear = isLeapYear ? 366 : 365;
+
+            const jan1 = `${year}-01-01`;
+            const dec31 = `${year}-12-31`;
+
+            // Yesterday's date
+            const yesterday = new Date(cityToday);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+            // Today string
+            const todayStr = cityDateStr;
+
+            // Forecast end (today + 14)
+            const forecastEnd = new Date(cityToday);
+            forecastEnd.setDate(forecastEnd.getDate() + 14);
+            const forecastEndStr = forecastEnd.toISOString().split('T')[0];
+
+            // Fill start = day after forecast end
+            const fillStart = new Date(forecastEnd);
+            fillStart.setDate(fillStart.getDate() + 1);
+            const fillStartStr = fillStart.toISOString().split('T')[0];
+
+            // Last year equivalent dates for fill
+            const lastYear = year - 1;
+            const fillStartLastYear = fillStartStr.replace(`${year}`, `${lastYear}`);
+            const dec31LastYear = `${lastYear}-12-31`;
+
+            // Build result array
+            const result = new Array(daysInYear);
+
+            try {
+                // Build the 3 API calls
+                const calls = [];
+
+                // 1. Archive: Jan 1 this year → yesterday (past real data)
+                if (yesterdayStr >= jan1) {
+                    calls.push(
+                        fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m&timezone=${encodeURIComponent(tz)}&start_date=${jan1}&end_date=${yesterdayStr}`)
+                            .then(r => r.json())
+                            .then(data => ({ type: 'past', data }))
+                            .catch(() => ({ type: 'past', data: null }))
+                    );
+                }
+
+                // 2. Forecast: today → today + 14 days
+                calls.push(
+                    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m&timezone=${encodeURIComponent(tz)}&start_date=${todayStr}&end_date=${forecastEndStr}`)
+                        .then(r => r.json())
+                        .then(data => ({ type: 'forecast', data }))
+                        .catch(() => ({ type: 'forecast', data: null }))
+                );
+
+                // 3. Archive last year: fill remaining days
+                if (fillStartStr <= dec31) {
+                    calls.push(
+                        fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m&timezone=${encodeURIComponent(tz)}&start_date=${fillStartLastYear}&end_date=${dec31LastYear}`)
+                            .then(r => r.json())
+                            .then(data => ({ type: 'fill', data }))
+                            .catch(() => ({ type: 'fill', data: null }))
+                    );
+                }
+
+                const results = await Promise.all(calls);
+
+                // Helper: day index from date string (0 = Jan 1)
+                function dayIndex(dateStr) {
+                    const d = new Date(dateStr + 'T00:00:00');
+                    const j1 = new Date(`${year}-01-01T00:00:00`);
+                    return Math.round((d - j1) / 86400000);
+                }
+
+                // Astronomical daylight fraction from latitude + day of year
+                // Smooth sinusoidal; handles polar night (0) and midnight sun (1)
+                const latRad = city.lat * Math.PI / 180;
+                function astroDay(doy) {
+                    const decl = -23.44 * Math.cos(2 * Math.PI / 365 * (doy + 10)) * Math.PI / 180;
+                    const cosHA = -Math.tan(latRad) * Math.tan(decl);
+                    if (cosHA <= -1) return 1.0; // midnight sun
+                    if (cosHA >= 1) return 0.0;  // polar night
+                    return Math.acos(cosHA) / Math.PI;
+                }
+
+                // Process results: group hourly data by day, average hours 9–15 (noon ± 3h)
+                for (const res of results) {
+                    if (!res.data || !res.data.hourly || !res.data.hourly.time) continue;
+                    const times = res.data.hourly.time;
+                    const temps = res.data.hourly.temperature_2m;
+
+                    // Group by day: collect temps for hours 9–15
+                    const dayTemps = {};
+                    for (let i = 0; i < times.length; i++) {
+                        if (temps[i] == null) continue;
+                        const dtStr = times[i]; // e.g. "2026-02-24T09:00"
+                        const dateStr = dtStr.substring(0, 10);
+                        const hour = parseInt(dtStr.substring(11, 13), 10);
+                        if (hour >= 9 && hour <= 15) {
+                            if (!dayTemps[dateStr]) dayTemps[dateStr] = [];
+                            dayTemps[dateStr].push(temps[i]);
+                        }
+                    }
+
+                    // Compute mean and assign to result
+                    for (const [dateStr, values] of Object.entries(dayTemps)) {
+                        const meanTemp = values.reduce((a, b) => a + b, 0) / values.length;
+                        let idx;
+
+                        if (res.type === 'fill') {
+                            const thisYearDate = dateStr.replace(`${lastYear}`, `${year}`);
+                            idx = dayIndex(thisYearDate);
+                        } else {
+                            idx = dayIndex(dateStr);
+                        }
+
+                        if (idx >= 0 && idx < daysInYear) {
+                            result[idx] = {
+                                date: dateStr,
+                                tempC: Math.round(meanTemp * 10) / 10,
+                                tier: res.type === 'past' ? 1 : res.type === 'forecast' ? 2 : 3,
+                                daylightFrac: astroDay(idx)
+                            };
+                        }
+                    }
+                }
+
+                // Fill any gaps with null
+                for (let i = 0; i < daysInYear; i++) {
+                    if (!result[i]) {
+                        const d = new Date(`${year}-01-01T00:00:00`);
+                        d.setDate(d.getDate() + i);
+                        result[i] = { date: d.toISOString().split('T')[0], tempC: null, tier: 0, daylightFrac: astroDay(i) };
+                    }
+                }
+
+                yearBandCache[cityKey] = result;
+                return result;
+
+            } catch (err) {
+                console.error('Year band fetch failed:', err);
+                return null;
+            }
+        }
+
+        // Draw the year band on canvas
+        function drawYearBand() {
+            const container = document.getElementById('yearBandContainer');
+            const canvas = document.getElementById('yearBandCanvas');
+            if (!canvas || !container) return;
+
+            const data = yearBandCache[currentCity];
+            if (!data) {
+                container.classList.remove('visible');
+                return;
+            }
+
+            const rect = container.getBoundingClientRect();
+            const w = rect.width;
+            const totalH = rect.height;
+            if (w <= 0 || totalH <= 0) return;
+
+            // Band on top, upward-pointing triangle below
+            const triH = 6;
+            const triGap = 1;
+            const bandTop = 0;
+            const bandH = totalH - triH - triGap;
+            const bandR = bandH / 2;
+
+            // Retina support
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = w * dpr;
+            canvas.height = totalH * dpr;
+            canvas.style.width = w + 'px';
+            canvas.style.height = totalH + 'px';
+
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            const daysInYear = data.length;
+
+            // Compute today index (needed for triangle + markers)
+            const city = cities[currentCity];
+            const tz = city && city.timezone && city.timezone !== 'auto' ? city.timezone : 'UTC';
+            const now = new Date();
+            const cityDateStr = now.toLocaleDateString('en-CA', { timeZone: tz });
+            const cityToday = new Date(cityDateStr + 'T00:00:00');
+            const jan1 = new Date(`${cityToday.getFullYear()}-01-01T00:00:00`);
+            const todayIndex = Math.round((cityToday - jan1) / 86400000);
+
+            // Clip to pill shape for the band area
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(0, bandTop, w, bandH, bandR);
+            ctx.clip();
+
+            // Draw each day as a vertical color slice with daylight-aware fade
+            // Each slice fades from center (noon) outward; bright portion = daylight duration
+            for (let i = 0; i < daysInYear; i++) {
+                const x = (i / daysInYear) * w;
+                const sliceW = Math.ceil(w / daysInYear) + 1;
+
+                const entry = data[i];
+                if (!entry || entry.tempC == null) {
+                    continue;
+                }
+
+                const normTemp = (entry.tempC + 25) / 60;
+                const color = getTempColor(normTemp);
+                const baseAlpha = 0.35;
+                const rawDlf = entry.daylightFrac || 0.5;
+                // Amplify deviation from 0.5 to enhance visual difference
+                const dlf = Math.max(0.08, Math.min(0.95, 0.5 + (rawDlf - 0.5) * 2.5));
+
+                // Trapezoid gradient: transparent edges, bright center sized by daylight
+                const grad = ctx.createLinearGradient(x, bandTop, x, bandTop + bandH);
+                const sunriseStop = Math.max(0.01, 0.5 - dlf / 2);
+                const sunsetStop = Math.min(0.99, 0.5 + dlf / 2);
+                grad.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+                grad.addColorStop(sunriseStop, `rgba(${color.r}, ${color.g}, ${color.b}, ${baseAlpha})`);
+                grad.addColorStop(sunsetStop, `rgba(${color.r}, ${color.g}, ${color.b}, ${baseAlpha})`);
+                grad.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+
+                ctx.fillStyle = grad;
+                ctx.fillRect(x, bandTop, sliceW, bandH);
+            }
+
+
+
+            // Viewed day marker (if navigating away from today)
+            if (currentDayOffset !== 0) {
+                const viewedIndex = todayIndex + currentDayOffset;
+                if (viewedIndex >= 0 && viewedIndex < daysInYear) {
+                    const viewedX = (viewedIndex / daysInYear) * w;
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([3, 3]);
+                    ctx.beginPath();
+                    ctx.moveTo(viewedX, bandTop);
+                    ctx.lineTo(viewedX, bandTop + bandH);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+
+            ctx.restore(); // Remove pill clip
+
+            // Upward-pointing triangle below the band for today
+            if (todayIndex >= 0 && todayIndex < daysInYear) {
+                const todayX = (todayIndex / daysInYear) * w;
+                const triW = 4; // half-width
+                const triTop = bandH + triGap; // just below the band
+                ctx.fillStyle = 'rgba(160, 170, 185, 0.45)';
+                ctx.beginPath();
+                ctx.moveTo(todayX, triTop);                   // top point (pointing up)
+                ctx.lineTo(todayX - triW, triTop + triH);    // bottom-left
+                ctx.lineTo(todayX + triW, triTop + triH);    // bottom-right
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // On touch devices, always show; on desktop, show when map is active or mousemove controls visibility
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || isWorldMapActive()) {
+                container.classList.add('visible');
+            }
+        }
+
+        // Year band: click to navigate to that day
+        function initYearBandInteraction() {
+            const container = document.getElementById('yearBandContainer');
+            const canvas = document.getElementById('yearBandCanvas');
+            const tooltip = document.getElementById('yearBandTooltip');
+            if (!canvas || !container || !tooltip) return;
+
+            canvas.addEventListener('click', async (e) => {
+                const data = yearBandCache[currentCity];
+                if (!data) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const dayIdx = Math.floor((x / rect.width) * data.length);
+
+                if (dayIdx < 0 || dayIdx >= data.length) return;
+                const entry = data[dayIdx];
+                if (!entry || entry.tempC == null) return;
+
+                // Compute offset from today
+                const city = cities[currentCity];
+                const tz = city && city.timezone && city.timezone !== 'auto' ? city.timezone : 'UTC';
+                const now = new Date();
+                const cityDateStr = now.toLocaleDateString('en-CA', { timeZone: tz });
+                const cityToday = new Date(cityDateStr + 'T00:00:00');
+                const jan1 = new Date(`${cityToday.getFullYear()}-01-01T00:00:00`);
+                const todayIndex = Math.round((cityToday - jan1) / 86400000);
+                let offset = dayIdx - todayIndex;
+
+                // Tier 3 (last year fill): navigate to the equivalent date last year
+                if (entry.tier === 3) {
+                    const lastYearDate = new Date(entry.date + 'T00:00:00');
+                    offset = Math.round((lastYearDate - cityToday) / 86400000);
+                }
+
+                // Block clicks beyond forecast range for tier 2 future days
+                if (entry.tier === 2 && offset > maxFutureOffset) return;
+
+                currentDayOffset = offset;
+                await refreshView();
+
+                // Prefetch past days if needed
+                if (currentDayOffset <= prefetchedPastBoundary + 3) {
+                    prefetchPastDays(currentCity, prefetchedPastBoundary);
+                }
+            });
+
+            // Hover tooltip (desktop only)
+            if (!('ontouchstart' in window) && navigator.maxTouchPoints <= 0) {
+                canvas.addEventListener('mousemove', (e) => {
+                    const data = yearBandCache[currentCity];
+                    if (!data) return;
+
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const dayIdx = Math.floor((x / rect.width) * data.length);
+
+                    if (dayIdx < 0 || dayIdx >= data.length || !data[dayIdx] || data[dayIdx].tempC == null) {
+                        tooltip.style.display = 'none';
+                        return;
+                    }
+
+                    const entry = data[dayIdx];
+                    const normTemp = (entry.tempC + 25) / 60;
+                    const color = getTempColor(normTemp);
+
+                    // Format date as "Mon Day" (e.g., "Feb 24")
+                    const year = new Date().getFullYear();
+                    const jan1 = new Date(`${year}-01-01T00:00:00`);
+                    const date = new Date(jan1);
+                    date.setDate(date.getDate() + dayIdx);
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const dateStr = `${monthNames[date.getMonth()]} ${date.getDate()}`;
+
+                    const tierLabel = entry.tier === 3 ? ' <span style="color:rgba(200,210,230,0.5)">(last year)</span>' : '';
+                    tooltip.innerHTML = `${dateStr} · <span style="color:rgb(${color.r},${color.g},${color.b})">${entry.tempC.toFixed(1)}°C</span>${tierLabel}`;
+                    tooltip.style.left = `${e.clientX}px`;
+                    tooltip.style.top = `${rect.top}px`;
+                    tooltip.style.display = 'block';
+                });
+
+                canvas.addEventListener('mouseleave', () => {
+                    tooltip.style.display = 'none';
+                });
+            }
+        }
+
+        // Year band auto-show/hide on mouse proximity (desktop only)
+        let yearBandFadeTimeout = null;
+        let yearBandCleanupTimeout = null;
+
+        function isWorldMapActive() {
+            const mc = document.getElementById('worldMapCanvas');
+            return mc && (mc.classList.contains('visible') || mc.style.pointerEvents === 'auto');
+        }
+
+        function showYearBand() {
+            const container = document.getElementById('yearBandContainer');
+            if (!container) return;
+            if (yearBandFadeTimeout) { clearTimeout(yearBandFadeTimeout); yearBandFadeTimeout = null; }
+            if (yearBandCleanupTimeout) { clearTimeout(yearBandCleanupTimeout); yearBandCleanupTimeout = null; }
+            container.style.pointerEvents = '';
+            if (!container.classList.contains('visible')) {
+                container.classList.add('visible');
+            }
+        }
+
+        function scheduleYearBandFadeOut() {
+            if (yearBandFadeTimeout || yearBandCleanupTimeout) return;
+            if (isWorldMapActive()) return;
+            const container = document.getElementById('yearBandContainer');
+            if (!container.classList.contains('visible')) return;
+            yearBandFadeTimeout = setTimeout(() => {
+                yearBandFadeTimeout = null;
+                container.style.pointerEvents = 'auto';
+                container.classList.remove('visible');
+                yearBandCleanupTimeout = setTimeout(() => {
+                    yearBandCleanupTimeout = null;
+                    container.style.pointerEvents = '';
+                }, 5500);
+            }, 10000);
+        }
+
+        function initYearBandHover() {
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
+            document.addEventListener('mousemove', (e) => {
+                const container = document.getElementById('yearBandContainer');
+                if (!container) return;
+                const rect = container.getBoundingClientRect();
+                if (e.clientY >= rect.top && e.clientY <= rect.bottom && yearBandCache[currentCity]) {
+                    showYearBand();
+                } else if (container.classList.contains('visible') || container.style.pointerEvents === 'auto') {
+                    if (!yearBandFadeTimeout && !yearBandCleanupTimeout) {
+                        scheduleYearBandFadeOut();
+                    }
+                }
+            });
+            document.addEventListener('mouseleave', () => {
+                const container = document.getElementById('yearBandContainer');
+                if (container && (container.classList.contains('visible') || container.style.pointerEvents === 'auto')) {
+                    if (!yearBandFadeTimeout && !yearBandCleanupTimeout) {
+                        scheduleYearBandFadeOut();
+                    }
+                }
+            });
+        }
+
         // Initialize all visualizations (static, no animation)
         function draw() {
             // Draw sky ribbon first so its dimensions are available for temperature curve positioning
@@ -2476,6 +2978,7 @@
             // Force layout reflow so getBoundingClientRect returns updated dimensions
             document.getElementById('skyRibbon').getBoundingClientRect();
             drawTemperatureCurve();
+            drawYearBand();
             startWindAnimation();
         }
 
@@ -3035,6 +3538,10 @@
                 console.log('Service worker registration failed:', err);
             });
         }
+
+        // Initialize year band click/hover interaction
+        initYearBandInteraction();
+        initYearBandHover();
 
         // Start - show loading immediately and initialize
         document.getElementById('loadingOverlay').classList.add('visible');
