@@ -4,7 +4,7 @@
 
 Weather Flow is an artistic weather visualization that renders a full day's weather as a horizontal panoramic painting. Time flows left to right. There are no weather icons, no dashboards — just a sky ribbon, a temperature curve, and subtle atmospheric effects. It's designed to feel like watching the day pass through a window.
 
-Single-file vanilla app (`index.html`, ~3550 lines). No frameworks, no build step. Open in a browser.
+Single-file vanilla app (`index.html`, ~4200 lines). No frameworks, no build step. Open in a browser. Default city: Baltimore.
 
 ## File Structure
 
@@ -20,6 +20,22 @@ weather flow/
 ├── notes.txt           # Scratch notes
 └── OLD/                # Earlier iterations (not used)
 ```
+
+## Splash Title & Hover Title
+
+### Splash Title (`#splashTitle`)
+- Shown on initial page load, overlaid on the sky ribbon area.
+- Fades out (0.6s) after first data render, then removed from DOM.
+- **Title**: "weather flow" — Avenir Next, Demi Bold (600), 3.2rem, deep blue `rgb(30, 80, 160)`, wide letter-spacing (0.18em), lowercase.
+- **Subtitle**: "forecast without numbers" — Avenir Next, Demi Bold (600), 0.78rem, same deep blue. Left-aligned under middle of 'w' in "weather" (`margin-left: 1rem`). Text fades out letter-by-letter starting from "without" (opacity 1.0 → 0.35 across 15 characters).
+- Positioned at `top: -15px` within `.weather-display-wrapper`.
+
+### Hover Title (`#hoverTitle`)
+- Identical styling to splash title but persists in the DOM.
+- Hidden by default (`opacity: 0`), fades in (0.8s) when mouse moves above the sky ribbon (from viewport top to ribbon top, within ribbon horizontal bounds). Desktop only — hidden on touch devices.
+- Fades out after 2s delay when mouse leaves the detection zone.
+- `pointer-events: none` — never blocks ribbon interaction.
+- JS listener: `document` mousemove event checks `e.clientY < ribbonRect.top` within ribbon's horizontal bounds.
 
 ## Visual Layers (top to bottom)
 
@@ -47,7 +63,7 @@ A flowing colored spline curve drawn on a full-viewport canvas positioned behind
 - **Below 0°C**: curve becomes dashed, gap length increasing as temperature drops further.
 - **Fill**: semi-transparent gradient wash flowing down from curve to baseline, fading with power curve.
 - **Glow layers**: 4 passes — 8px outer glow, 4px medium, 2px main line, 0.8px bright highlight. All fade at night.
-- **Reference bar**: vertical color-coded tick mark at noon showing the display temperature range, with marks at 0°C and 40°C.
+- **Reference bar**: vertical color-coded tick mark at noon showing the display temperature range, with marks at 0°C, 10°C, 20°C, and 40°C (each in its corresponding color).
 - **Current time marker**: white downward triangle above sky ribbon, today only.
 
 **Adaptive range**: fetches samples from start/end of forecast period, calculates mean, sets visible range to mean −15°C / mean +22.5°C. This zooms the curve for tropical, arctic, or temperate cities.
@@ -85,7 +101,7 @@ A thin horizontal color strip below the day selector showing the mean midday tem
 - **Today marker**: small triangle below band, pointing up
 - **Viewed day marker**: dashed white line when navigating away from today
 - **Click**: navigates to that day (past only or within forecast range)
-- **Hover tooltip** (desktop): shows "Mon Day · X.X°C" with colored temperature + "(last year)" for tier 3
+- **Hover tooltip** (desktop): shows "Mon Day · 11h05 · 8°C" — date, daylight duration (rounded to 5 min), colored integer temperature + "(last year)" for tier 3
 - **Caching**: `yearBandCache` keyed by `cityKey`. Refetched on city change.
 - **Height**: 18px desktop, 16px tablet, 14px phone. Pill-shaped (border-radius).
 - **Functions**: `fetchYearBandData(cityKey)`, `drawYearBand()`, `initYearBandInteraction()`, `initYearBandHover()`, `showYearBand()`, `scheduleYearBandFadeOut()`
@@ -118,6 +134,7 @@ A thin horizontal color strip below the day selector showing the mean midday tem
 
 - In-memory `weatherCache` keyed by `cityKey-dateString`.
 - In-memory `yearBandCache` keyed by `cityKey` (365-entry array of `{date, tempC, tier, daylightFrac}`).
+- In-memory `similarCache` keyed by date string (array of `{name, lat, lon, meanTempC}` for 284 cities).
 - Prefetches full 14-day forecast in batches of 3 after initial load.
 - Prefetches past days in batches of 7 when navigating backward.
 
@@ -137,8 +154,20 @@ A thin horizontal color strip below the day selector showing the mean midday tem
 - "set as default" link appears after picking a city → saves to `localStorage`.
 
 ### Random Button
-- Picks a random world capital (~90 cities, all continents).
+- Picks a random world capital (~100 cities, all continents).
 - Shows world map overlay with city dot.
+- Clears any similar-city dots from a previous "similar" search.
+
+### Similar Button
+- Finds cities worldwide with similar daytime temperatures to the currently viewed day.
+- Uses `majorCities` array: 284 cities with 1M+ population across all continents.
+- Fetches all cities' temperatures for the selected date via Open-Meteo batch API (6 parallel requests of ~50 cities each, using comma-separated lat/lon).
+- Filters cities within ±4°C of the current city's mean daytime temperature.
+- Shows world map overlay with colored dots for all matching cities (2.5px radius, 0.7 alpha) plus the main city dot on top (3px, 0.9 alpha). Dot colors use `getTempColor()`.
+- Results cached in `similarCache` keyed by date string.
+- Button shows "..." while loading; extra dots cleared on random click or map click.
+- **Functions**: `fetchCityTemperatures(dateStr)` — batch-fetches and returns `[{name, lat, lon, meanTempC}]`.
+- **Data**: `majorCities` array of `{name, lat, lon}`, `currentExtraDots` global for passing dots through `drawWorldMap`/`showWorldMap`/`resizeWorldMap`.
 
 ### Tooltips (desktop only, hidden on touch)
 - **Sky ribbon**: hour, cloud %, precipitation mm/cm, sunrise/sunset time near those events.
@@ -155,13 +184,17 @@ A thin horizontal color strip below the day selector showing the mean midday tem
 | `drawSkyRibbon()` | Renders entire sky ribbon (static, one-shot) |
 | `drawTemperatureCurve()` | Renders temperature curve + reference bar + time marker (static) |
 | `drawWindAnimation(timestamp)` | RAF loop for wind streaks |
-| `showWorldMap(lat, lon)` | Renders + fades world map overlay |
+| `showWorldMap(lat, lon)` | Renders + fades world map overlay (passes `currentExtraDots` to `drawWorldMap`) |
+| `drawWorldMap(ctx, polygons, lat, lon, bounds, extraDots)` | Draws country outlines + optional similar-city dots + main city dot |
+| `fetchCityTemperatures(dateStr)` | Batch-fetches 284 major cities' mean daytime temps for a date (parallel requests) |
 | `fetchYearBandData(cityKey)` | 3 API calls → merged 365-entry array `{date, tempC, tier, daylightFrac}` |
 | `drawYearBand()` | Canvas rendering of year band with color slices + daylight gradient + markers |
 | `initYearBandInteraction()` | Sets up click (navigate) + hover (tooltip) on year band |
 | `initYearBandHover()` | Desktop auto-show/hide: mousemove detection, 10s timer, 5s fade-out |
 | `showYearBand()` | Shows year band (cancels pending fade, adds `.visible`) |
 | `scheduleYearBandFadeOut()` | Schedules 10s delay → remove `.visible` → 5s fade → cleanup |
+| `calculateTempRangeFromData(dayData)` | Synchronous temp range from single day's data (fast initial render) |
+| `refineTempRangeInBackground(cityKey)` | Background fetch of day+14, recalculates range, re-renders if changed |
 | `refreshView(skipTempRangeRecalc)` | Main entry: fetch data → update → draw all |
 | `draw()` | Calls `drawSkyRibbon()` → reflow → `drawTemperatureCurve()` → `drawYearBand()` → `startWindAnimation()` |
 | `noise(x, y, seed)` | Sin-hash pseudo-random for organic textures |
@@ -172,6 +205,8 @@ A thin horizontal color strip below the day selector showing the mean midday tem
 ```
 body (dark gradient background #0d1117 → #0f1a2e)
 └── .weather-display-wrapper (relative container for all canvases)
+    ├── #splashTitle (initial load title, removed after first render)
+    ├── #hoverTitle (hover title, fades in/out on mouse above ribbon)
     ├── #loadingOverlay (shimmer skeleton, shown during fetches)
     ├── #tempCurveCanvas (full viewport, z-index: 0)
     ├── #windCanvas (full viewport, z-index: 1, animated)
@@ -221,7 +256,8 @@ Touch devices: arrows hidden, tap left/right third of sky to navigate days. Tool
 ## Style Notes
 
 - All UI chrome is ghostly: nearly transparent backgrounds, hairline borders, muted silver-white text.
-- Font: system UI (`Segoe UI`, Tahoma, etc.), always small and light.
+- Title font: Avenir Next (system font, no external load), Demi Bold, deep blue `rgb(30, 80, 160)`.
+- UI font: system UI (`Segoe UI`, Tahoma, etc.), always small and light.
 - Buttons: `rgba(255,255,255,0.06)` background, `rgba(255,255,255,0.08)` border, 12px border-radius.
 - Loading: shimmer skeleton with traveling gradient, 1.5s ease-in-out infinite animation.
 - Transitions: 0.25s ease on all interactive elements.
