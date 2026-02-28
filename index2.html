@@ -652,130 +652,10 @@
             100% { background-position: -200% 0; }
         }
 
-        /* Splash title shown on initial page load */
-        .splash-title {
-            position: absolute;
-            top: -15px;
-            left: 0;
-            right: 0;
-            height: 160px;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            pointer-events: none;
-            opacity: 1;
-            transition: opacity 0.6s ease;
-        }
-
-        .splash-title.hidden {
-            opacity: 0;
-        }
-
-        .splash-inner {
-            display: inline-block;
-            position: relative;
-        }
-
-        .splash-title .splash-main {
-            font-family: 'Avenir Next', 'Avenir', sans-serif;
-            font-weight: 500;
-            font-size: 3.2rem;
-            color: rgb(30, 80, 160);
-            letter-spacing: 0.18em;
-            line-height: 1;
-            white-space: nowrap;
-            text-transform: lowercase;
-        }
-
-        .splash-title .splash-sub {
-            font-family: 'Avenir Next', 'Avenir', sans-serif;
-            font-weight: 500;
-            font-size: 0.78rem;
-            letter-spacing: 0.22em;
-            color: rgb(30, 80, 160);
-            margin-top: -2px;
-            margin-left: 1rem;
-            text-align: left;
-        }
-
-        @media (max-width: 480px) {
-            .splash-title .splash-main {
-                font-size: 2rem;
-            }
-            .splash-title .splash-sub {
-                font-size: 0.5rem;
-            }
-        }
-
-        /* Hover title - appears when mouse is above sky ribbon */
-        .hover-title {
-            position: absolute;
-            top: -15px;
-            left: 0;
-            right: 0;
-            height: 160px;
-            z-index: 50;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.8s ease;
-        }
-
-        .hover-title.visible {
-            opacity: 1;
-        }
-
-        .hover-title .hover-inner {
-            display: inline-block;
-            position: relative;
-        }
-
-        .hover-title .hover-main {
-            font-family: 'Avenir Next', 'Avenir', sans-serif;
-            font-weight: 500;
-            font-size: 3.2rem;
-            color: rgb(30, 80, 160);
-            letter-spacing: 0.18em;
-            line-height: 1;
-            white-space: nowrap;
-            text-transform: lowercase;
-        }
-
-        .hover-title .hover-sub {
-            font-family: 'Avenir Next', 'Avenir', sans-serif;
-            font-weight: 500;
-            font-size: 0.78rem;
-            letter-spacing: 0.22em;
-            color: rgb(30, 80, 160);
-            margin-top: -2px;
-            margin-left: 1rem;
-            text-align: left;
-        }
-
-        .touch-device .hover-title {
-            display: none;
-        }
-
-        @media (max-width: 480px) {
-            .hover-title .hover-main {
-                font-size: 2rem;
-            }
-            .hover-title .hover-sub {
-                font-size: 0.5rem;
-            }
-        }
-
     </style>
 </head>
 <body>
     <div class="weather-display-wrapper" id="weatherDisplayWrapper">
-        <div class="splash-title" id="splashTitle"><div class="splash-inner"><div class="splash-main">weather flow</div><div class="splash-sub">forecast <span style="opacity:1">w</span><span style="opacity:0.95">i</span><span style="opacity:0.91">t</span><span style="opacity:0.86">h</span><span style="opacity:0.81">o</span><span style="opacity:0.77">u</span><span style="opacity:0.72">t</span><span style="opacity:0.67"> </span><span style="opacity:0.63">n</span><span style="opacity:0.58">u</span><span style="opacity:0.53">m</span><span style="opacity:0.49">b</span><span style="opacity:0.44">e</span><span style="opacity:0.39">r</span><span style="opacity:0.35">s</span></div></div></div>
-        <div class="hover-title" id="hoverTitle"><div class="hover-inner"><div class="hover-main">weather flow</div><div class="hover-sub">forecast <span style="opacity:1">w</span><span style="opacity:0.95">i</span><span style="opacity:0.91">t</span><span style="opacity:0.86">h</span><span style="opacity:0.81">o</span><span style="opacity:0.77">u</span><span style="opacity:0.72">t</span><span style="opacity:0.67"> </span><span style="opacity:0.63">n</span><span style="opacity:0.58">u</span><span style="opacity:0.53">m</span><span style="opacity:0.49">b</span><span style="opacity:0.44">e</span><span style="opacity:0.39">r</span><span style="opacity:0.35">s</span></div></div></div>
         <div class="loading-overlay" id="loadingOverlay">
             <div class="loading-skeleton"></div>
             <div class="loading-curve" id="loadingCurve"></div>
@@ -939,98 +819,6 @@
         let currentMapLon = null;    // Last displayed dot longitude
         let currentExtraDots = null; // Array of {lat, lon, color} for similar cities
 
-        // Heatmap overlay state
-        let heatmapGridCache = {};     // dateStr → 2D array [row][col] of tempC
-        let currentHeatmapGrid = null; // currently loaded grid data
-        const HEATMAP_LAT_MIN = -60, HEATMAP_LAT_MAX = 80;
-        const HEATMAP_LON_MIN = -180, HEATMAP_LON_MAX = 170;
-        const HEATMAP_STEP = 10;
-        const HEATMAP_ROWS = 15; // (80 - (-60)) / 10 + 1
-        const HEATMAP_COLS = 36; // (170 - (-180)) / 10 + 1
-
-        // Fetch temperature grid for heatmap overlay
-        async function fetchHeatmapGrid(dateStr) {
-            if (heatmapGridCache[dateStr]) return heatmapGridCache[dateStr];
-
-            // Generate grid points
-            const gridPoints = [];
-            for (let row = 0; row < HEATMAP_ROWS; row++) {
-                for (let col = 0; col < HEATMAP_COLS; col++) {
-                    gridPoints.push({
-                        lat: HEATMAP_LAT_MIN + row * HEATMAP_STEP,
-                        lon: HEATMAP_LON_MIN + col * HEATMAP_STEP,
-                        row, col
-                    });
-                }
-            }
-
-            // Choose API based on date
-            const today = new Date();
-            const target = new Date(dateStr + 'T00:00:00');
-            const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
-            const isHistorical = diffDays < -5;
-            const baseUrl = isHistorical
-                ? 'https://archive-api.open-meteo.com/v1/archive'
-                : 'https://api.open-meteo.com/v1/forecast';
-
-            // Batch into groups of 50
-            const batchSize = 50;
-            const batches = [];
-            for (let i = 0; i < gridPoints.length; i += batchSize) {
-                batches.push(gridPoints.slice(i, i + batchSize));
-            }
-
-            // Initialize result grid
-            const grid = [];
-            for (let r = 0; r < HEATMAP_ROWS; r++) {
-                grid.push(new Array(HEATMAP_COLS).fill(null));
-            }
-
-            // Fetch all batches in parallel
-            const batchResults = await Promise.all(batches.map(async (batch) => {
-                try {
-                    const lats = batch.map(p => p.lat).join(',');
-                    const lons = batch.map(p => p.lon).join(',');
-                    const url = `${baseUrl}?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,is_day&start_date=${dateStr}&end_date=${dateStr}&timezone=auto`;
-                    const resp = await fetch(url);
-                    return { status: 'fulfilled', value: { batch, json: await resp.json() } };
-                } catch (e) {
-                    return { status: 'rejected' };
-                }
-            }));
-
-            batchResults.forEach(result => {
-                if (result.status === 'fulfilled') {
-                    const { batch, json } = result.value;
-                    const items = Array.isArray(json) ? json : [json];
-                    items.forEach((item, idx) => {
-                        const pt = batch[idx];
-                        if (item.hourly && item.hourly.temperature_2m && item.hourly.is_day) {
-                            let s = 0, c = 0;
-                            for (let h = 0; h < item.hourly.temperature_2m.length; h++) {
-                                if (item.hourly.is_day[h]) {
-                                    s += item.hourly.temperature_2m[h];
-                                    c++;
-                                }
-                            }
-                            if (c > 0) {
-                                grid[pt.row][pt.col] = s / c;
-                            } else {
-                                // All hours are night (polar), use overall mean
-                                const temps = item.hourly.temperature_2m.filter(t => t !== null);
-                                if (temps.length > 0) {
-                                    grid[pt.row][pt.col] = temps.reduce((a, b) => a + b, 0) / temps.length;
-                                }
-                            }
-                        }
-                    });
-                }
-            });
-
-            heatmapGridCache[dateStr] = grid;
-            return grid;
-        }
-
         // Fetch and decode TopoJSON country data (110m simplified from Natural Earth)
         async function fetchWorldMapData() {
             if (worldMapPolygons) return worldMapPolygons;
@@ -1113,73 +901,10 @@
             }
         }
 
-        // Draw heatmap overlay clipped to land masses
-        function drawHeatmapOverlay(ctx, mapBounds, polygons, gridData) {
-            // Build offscreen canvas with grid temperatures
-            const offscreen = document.createElement('canvas');
-            offscreen.width = HEATMAP_COLS;
-            offscreen.height = HEATMAP_ROWS;
-            const offCtx = offscreen.getContext('2d');
-            const imgData = offCtx.createImageData(HEATMAP_COLS, HEATMAP_ROWS);
-
-            for (let row = 0; row < HEATMAP_ROWS; row++) {
-                for (let col = 0; col < HEATMAP_COLS; col++) {
-                    const tempC = gridData[row][col];
-                    const idx = ((HEATMAP_ROWS - 1 - row) * HEATMAP_COLS + col) * 4; // flip Y: row 0 is -60° (bottom)
-                    if (tempC !== null) {
-                        const color = getTempColor((tempC + 25) / 60);
-                        imgData.data[idx] = Math.round(color.r);
-                        imgData.data[idx + 1] = Math.round(color.g);
-                        imgData.data[idx + 2] = Math.round(color.b);
-                        imgData.data[idx + 3] = 140; // ~0.55 alpha
-                    }
-                    // null cells stay transparent (0,0,0,0)
-                }
-            }
-            offCtx.putImageData(imgData, 0, 0);
-
-            // Clip to land polygons
-            ctx.save();
-            ctx.beginPath();
-            polygons.forEach(ring => {
-                if (ring.length < 3) return;
-                const allSouth = ring.every(pt => pt[1] < -60);
-                if (allSouth) return;
-                const first = projectGeo(ring[0][0], ring[0][1], mapBounds);
-                ctx.moveTo(first.x, first.y);
-                for (let i = 1; i < ring.length; i++) {
-                    const p = projectGeo(ring[i][0], ring[i][1], mapBounds);
-                    const lonJump = Math.abs(ring[i][0] - ring[i - 1][0]);
-                    if (lonJump > 90) {
-                        ctx.moveTo(p.x, p.y);
-                    } else {
-                        ctx.lineTo(p.x, p.y);
-                    }
-                }
-            });
-            ctx.clip();
-
-            // Draw the tiny heatmap stretched to map bounds with bilinear smoothing
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-
-            // Map the grid's lat/lon range to canvas pixel coordinates
-            const topLeft = projectGeo(HEATMAP_LON_MIN - HEATMAP_STEP / 2, HEATMAP_LAT_MAX + HEATMAP_STEP / 2, mapBounds);
-            const bottomRight = projectGeo(HEATMAP_LON_MAX + HEATMAP_STEP / 2, HEATMAP_LAT_MIN - HEATMAP_STEP / 2, mapBounds);
-            ctx.drawImage(offscreen, topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
-
-            ctx.restore();
-        }
-
         // Draw the world map with country outlines and city marker
         // Draw country outlines + extra dots (background layer, no main city dot)
-        function drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData) {
-            // Draw heatmap underneath if active
-            if (heatmapGridData) {
-                drawHeatmapOverlay(ctx, mapBounds, polygons, heatmapGridData);
-            }
-
-            ctx.strokeStyle = heatmapGridData ? 'rgba(100, 130, 180, 0.5)' : 'rgba(100, 130, 180, 0.3)';
+        function drawWorldMapBackground(ctx, polygons, mapBounds, extraDots) {
+            ctx.strokeStyle = 'rgba(100, 130, 180, 0.3)';
             ctx.lineWidth = 0.5;
             polygons.forEach(ring => {
                 if (ring.length < 3) return;
@@ -1231,49 +956,9 @@
         }
 
         // Draw full world map (background + city dot)
-        function drawWorldMap(ctx, polygons, cityLat, cityLon, mapBounds, extraDots, heatmapGridData) {
-            drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData);
+        function drawWorldMap(ctx, polygons, cityLat, cityLon, mapBounds, extraDots) {
+            drawWorldMapBackground(ctx, polygons, mapBounds, extraDots);
             drawCityDot(ctx, cityLat, cityLon, mapBounds);
-        }
-
-        // Animate dot from one position to another on the map
-        let dotAnimationId = null;
-        function animateDotTransition(canvas, fromLat, fromLon, toLat, toLon, duration) {
-            if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
-            const ctx = canvas.getContext('2d');
-            const rect = canvas.getBoundingClientRect();
-            const mapWidth = rect.width;
-            const mapHeight = rect.height;
-
-            // Draw background once and cache as ImageData
-            ctx.setTransform(2, 0, 0, 2, 0, 0);
-            ctx.clearRect(0, 0, mapWidth, mapHeight);
-            drawWorldMapBackground(ctx, worldMapPolygons, currentMapBounds, currentExtraDots, currentHeatmapGrid);
-            const baseImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-            const startTime = performance.now();
-            function frame(now) {
-                const elapsed = now - startTime;
-                const t = Math.min(1, elapsed / duration);
-                const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
-
-                const lat = fromLat + (toLat - fromLat) * eased;
-                const lon = fromLon + (toLon - fromLon) * eased;
-
-                // Restore background
-                ctx.putImageData(baseImage, 0, 0);
-                ctx.setTransform(2, 0, 0, 2, 0, 0);
-
-                // Draw dot at interpolated position
-                drawCityDot(ctx, lat, lon, currentMapBounds);
-
-                if (t < 1) {
-                    dotAnimationId = requestAnimationFrame(frame);
-                } else {
-                    dotAnimationId = null;
-                }
-            }
-            dotAnimationId = requestAnimationFrame(frame);
         }
 
         // Show the world map below the UI
@@ -1281,45 +966,12 @@
             // Cancel any existing fade timers
             if (mapFadeTimeout) { clearTimeout(mapFadeTimeout); mapFadeTimeout = null; }
             if (mapClearTimeout) { clearTimeout(mapClearTimeout); mapClearTimeout = null; }
-            if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
 
             const canvas = document.getElementById('worldMapCanvas');
-            const mapAlreadyVisible = canvas.classList.contains('visible') && currentMapBounds && currentMapLat !== null;
-
-            // Save previous position for animation
-            const prevLat = currentMapLat;
-            const prevLon = currentMapLon;
 
             // Track current dot position for resize redraw
             currentMapLat = cityLat;
             currentMapLon = cityLon;
-
-            // Fetch heatmap grid for current date (skip if already cached for this date)
-            const city = cities[currentCity];
-            const dateStr = getDateForOffset(city, currentDayOffset);
-            if (heatmapGridCache[dateStr]) {
-                currentHeatmapGrid = heatmapGridCache[dateStr];
-            } else {
-                fetchHeatmapGrid(dateStr).then(grid => {
-                    currentHeatmapGrid = grid;
-                    // Redraw map with heatmap if still visible
-                    if (canvas.classList.contains('visible') && currentMapBounds && worldMapPolygons) {
-                        const ctx = canvas.getContext('2d');
-                        const rect = canvas.getBoundingClientRect();
-                        ctx.setTransform(2, 0, 0, 2, 0, 0);
-                        ctx.clearRect(0, 0, rect.width, rect.height);
-                        drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots, currentHeatmapGrid);
-                    }
-                }).catch(e => console.error('Heatmap fetch failed:', e));
-            }
-
-            // If map is already visible, animate the dot instead of rebuilding
-            if (mapAlreadyVisible) {
-                animateDotTransition(canvas, prevLat, prevLon, cityLat, cityLon, 800);
-                showYearBand();
-                scheduleMapFadeOut(canvas);
-                return;
-            }
 
             canvas.classList.remove('visible');
 
@@ -1361,7 +1013,7 @@
             // Draw once (static, no animation)
             const ctx = canvas.getContext('2d');
             ctx.setTransform(2, 0, 0, 2, 0, 0);
-            drawWorldMap(ctx, polygons, cityLat, cityLon, currentMapBounds, currentExtraDots, currentHeatmapGrid);
+            drawWorldMap(ctx, polygons, cityLat, cityLon, currentMapBounds, currentExtraDots);
 
             // Fade in
             canvas.style.pointerEvents = '';
@@ -1383,7 +1035,6 @@
                 canvas.classList.remove('visible');
                 // Clean up after the 5s fade-out transition completes
                 mapClearTimeout = setTimeout(() => {
-                    if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
                     canvas.style.pointerEvents = '';
                     currentMapBounds = null;
                     currentMapLat = null;
@@ -1400,7 +1051,6 @@
 
         // Resize the map if it's currently visible
         function resizeWorldMap() {
-            if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
             const canvas = document.getElementById('worldMapCanvas');
             if (!canvas.classList.contains('visible') || currentMapLat === null || !worldMapPolygons) return;
 
@@ -1433,7 +1083,7 @@
 
             const ctx = canvas.getContext('2d');
             ctx.setTransform(2, 0, 0, 2, 0, 0);
-            drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots, currentHeatmapGrid);
+            drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots);
         }
 
         // Click on the map to select a location
@@ -1462,7 +1112,7 @@
             ctx.setTransform(2, 0, 0, 2, 0, 0);
             ctx.clearRect(0, 0, mapWidth, mapHeight);
             currentExtraDots = null; // Clear similar-city dots on new location pick
-            drawWorldMap(ctx, worldMapPolygons, lat, lon, currentMapBounds, null, currentHeatmapGrid);
+            drawWorldMap(ctx, worldMapPolygons, lat, lon, currentMapBounds, null);
 
             // Restore full visibility (in case we're mid-fade) and reset timer
             canvas.classList.add('visible');
@@ -2002,23 +1652,6 @@
                     fetchYearBandData(currentCity).then(() => drawYearBand());
                 }
 
-                // Update heatmap if map is visible and day changed (non-blocking)
-                const mapCanvas = document.getElementById('worldMapCanvas');
-                if (mapCanvas.classList.contains('visible') && currentMapBounds) {
-                    const city = cities[currentCity];
-                    const dateStr = getDateForOffset(city, currentDayOffset);
-                    if (heatmapGridCache[dateStr]) {
-                        currentHeatmapGrid = heatmapGridCache[dateStr];
-                        if (worldMapPolygons) resizeWorldMap();
-                    } else {
-                        fetchHeatmapGrid(dateStr).then(grid => {
-                            currentHeatmapGrid = grid;
-                            if (mapCanvas.classList.contains('visible') && currentMapBounds && worldMapPolygons) {
-                                resizeWorldMap();
-                            }
-                        });
-                    }
-                }
             } finally {
                 if (needsLoading) {
                     hideLoading();
@@ -4405,38 +4038,6 @@
                 skyTooltip.style.display = 'none';
             });
 
-            // Hover title: show "weather flow" when mouse is above the sky ribbon
-            const hoverTitle = document.getElementById('hoverTitle');
-            let hoverTitleFadeTimer = null;
-
-            document.addEventListener('mousemove', (e) => {
-                if (!hoverTitle) return;
-                const ribbon = document.getElementById('skyRibbon');
-                if (!ribbon) return;
-                const ribbonRect = ribbon.getBoundingClientRect();
-
-                // Above the sky ribbon = from viewport top to ribbon top
-                const isAboveRibbon = e.clientY < ribbonRect.top &&
-                                      e.clientX >= ribbonRect.left &&
-                                      e.clientX <= ribbonRect.right;
-
-                if (isAboveRibbon) {
-                    // Show title
-                    if (hoverTitleFadeTimer) {
-                        clearTimeout(hoverTitleFadeTimer);
-                        hoverTitleFadeTimer = null;
-                    }
-                    hoverTitle.classList.add('visible');
-                } else if (hoverTitle.classList.contains('visible')) {
-                    // Schedule fade out after delay
-                    if (!hoverTitleFadeTimer) {
-                        hoverTitleFadeTimer = setTimeout(() => {
-                            hoverTitle.classList.remove('visible');
-                            hoverTitleFadeTimer = null;
-                        }, 2000);
-                    }
-                }
-            });
         }
 
         if (isTouchDevice) {
@@ -4512,7 +4113,6 @@
         updateDayLabel();
 
         (async () => {
-            const splash = document.getElementById('splashTitle');
             try {
                 // Single API call for today's data
                 await updateWeatherData(currentCity, 0);
@@ -4530,12 +4130,6 @@
                 console.error('Initial load failed:', e);
                 // Show day selector even on error
                 document.querySelector('.day-selector').classList.add('visible');
-            }
-
-            // Fade out splash title
-            if (splash) {
-                splash.classList.add('hidden');
-                setTimeout(() => splash.remove(), 600);
             }
 
             // Background: refine temp range, year band, prefetch
