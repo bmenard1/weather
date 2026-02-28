@@ -4,7 +4,7 @@
 
 Weather Flow is an artistic weather visualization that renders a full day's weather as a horizontal panoramic painting. Time flows left to right. There are no weather icons, no dashboards — just a sky ribbon, a temperature curve, and subtle atmospheric effects. It's designed to feel like watching the day pass through a window.
 
-Single-file vanilla app (`index.html`, ~4200 lines). No frameworks, no build step. Open in a browser. Default city: Baltimore.
+Single-file vanilla app (`index.html`, ~4500 lines). No frameworks, no build step. Open in a browser. Default city: Baltimore.
 
 ## File Structure
 
@@ -80,10 +80,14 @@ The only continuously animated layer.
 ### 4. World Map Overlay (canvas: `#worldMapCanvas`)
 
 - TopoJSON equirectangular world map (Natural Earth 110m via jsDelivr CDN).
-- Appears on Random click or map interaction. Fades in 0.8s, auto-fades out after 8s (15s if clicked).
-- Country outlines in subtle blue-gray. Colored dot at current city (color = mean daytime temperature).
+- Appears on Random click, city selection, or map interaction. Fades in 0.8s, auto-fades out after 8s (15s if clicked).
+- **Temperature heatmap**: land masses are filled with a smooth temperature color field showing mean daytime temperatures worldwide. Uses a 10° lat/lon grid (~540 points) fetched from Open-Meteo, rendered as a tiny 36×15 offscreen canvas stretched to map bounds with browser bilinear interpolation. Clipped to country polygons via `ctx.clip()` — oceans stay transparent.
+- Country outlines drawn on top of heatmap (slightly stronger stroke when heatmap active). Colored dot at current city (color = mean daytime temperature).
+- **Animated dot transition**: when changing city (random or autocomplete) while map is already visible, the dot animates from old position to new (800ms, ease-out cubic). Uses `ImageData` caching: background (outlines + heatmap) drawn once and cached, RAF loop restores it each frame and draws dot at interpolated lat/lon.
 - **Clickable**: click anywhere → reverse geocode via Nominatim → load that location's weather. Remains clickable throughout the 5s fade-out via inline `pointer-events: auto` override.
 - Clipped to 83°N–60°S (excludes Antarctica). Anti-meridian artifacts filtered.
+- **Heatmap caching**: `heatmapGridCache` keyed by `dateStr`. Only fetched once per date — pressing random on the same day reuses cached data with zero API calls. Grid data updates automatically when navigating to a different day while map is visible.
+- **Rendering split**: `drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData)` draws heatmap + outlines + extra dots. `drawCityDot(ctx, lat, lon, mapBounds)` draws the main city dot. `drawWorldMap()` calls both.
 
 ### 5. Year Temperature Band (canvas: `#yearBandCanvas`)
 
@@ -101,7 +105,7 @@ A thin horizontal color strip below the day selector showing the mean midday tem
 - **Today marker**: small triangle below band, pointing up
 - **Viewed day marker**: dashed white line when navigating away from today
 - **Click**: navigates to that day (past only or within forecast range)
-- **Hover tooltip** (desktop): shows "Mon Day · 11h05 · 8°C" — date, daylight duration (rounded to 5 min), colored integer temperature + "(last year)" for tier 3
+- **Hover tooltip** (desktop): shows "Mon Day · 8°C" — date, colored integer temperature + "(last year)" for tier 3
 - **Caching**: `yearBandCache` keyed by `cityKey`. Refetched on city change.
 - **Height**: 18px desktop, 16px tablet, 14px phone. Pill-shaped (border-radius).
 - **Functions**: `fetchYearBandData(cityKey)`, `drawYearBand()`, `initYearBandInteraction()`, `initYearBandHover()`, `showYearBand()`, `scheduleYearBandFadeOut()`
@@ -134,7 +138,7 @@ A thin horizontal color strip below the day selector showing the mean midday tem
 
 - In-memory `weatherCache` keyed by `cityKey-dateString`.
 - In-memory `yearBandCache` keyed by `cityKey` (365-entry array of `{date, tempC, tier, daylightFrac}`).
-- In-memory `similarCache` keyed by date string (array of `{name, lat, lon, meanTempC}` for 284 cities).
+- In-memory `heatmapGridCache` keyed by `dateStr` (2D array `[row][col]` of mean daytime °C for 540-point global grid). Only fetched once per date.
 - Prefetches full 14-day forecast in batches of 3 after initial load.
 - Prefetches past days in batches of 7 when navigating backward.
 
@@ -155,23 +159,15 @@ A thin horizontal color strip below the day selector showing the mean midday tem
 
 ### Random Button
 - Picks a random world capital (~100 cities, all continents).
-- Shows world map overlay with city dot.
-- Clears any similar-city dots from a previous "similar" search.
+- Shows world map overlay with temperature heatmap and animated city dot.
+- If map is already visible, animates dot from previous city to new city.
 
-### Similar Button
-- Finds cities worldwide with similar daytime temperatures to the currently viewed day.
-- Uses `majorCities` array: 284 cities with 1M+ population across all continents.
-- Fetches all cities' temperatures for the selected date via Open-Meteo batch API (6 parallel requests of ~50 cities each, using comma-separated lat/lon).
-- Filters cities within ±4°C of the current city's mean daytime temperature.
-- Shows world map overlay with colored dots for all matching cities (2.5px radius, 0.7 alpha) plus the main city dot on top (3px, 0.9 alpha). Dot colors use `getTempColor()`.
-- Results cached in `similarCache` keyed by date string.
-- Button shows "..." while loading; extra dots cleared on random click or map click.
-- **Functions**: `fetchCityTemperatures(dateStr)` — batch-fetches and returns `[{name, lat, lon, meanTempC}]`.
-- **Data**: `majorCities` array of `{name, lat, lon}`, `currentExtraDots` global for passing dots through `drawWorldMap`/`showWorldMap`/`resizeWorldMap`.
+### Similar Button (commented out)
+- Code present but commented out. Would find cities with similar daytime temperatures using `majorCities` array (284 cities with 1M+ population).
 
 ### Tooltips (desktop only, hidden on touch)
 - **Sky ribbon**: hour, cloud %, precipitation mm/cm, sunrise/sunset time near those events.
-- **Temperature curve**: hour, °C (color-coded), wind km/h if >15.
+- **Temperature curve**: hour, integer °C (color-coded), wind km/h if >15.
 
 ## Key Functions
 
@@ -184,9 +180,13 @@ A thin horizontal color strip below the day selector showing the mean midday tem
 | `drawSkyRibbon()` | Renders entire sky ribbon (static, one-shot) |
 | `drawTemperatureCurve()` | Renders temperature curve + reference bar + time marker (static) |
 | `drawWindAnimation(timestamp)` | RAF loop for wind streaks |
-| `showWorldMap(lat, lon)` | Renders + fades world map overlay (passes `currentExtraDots` to `drawWorldMap`) |
-| `drawWorldMap(ctx, polygons, lat, lon, bounds, extraDots)` | Draws country outlines + optional similar-city dots + main city dot |
-| `fetchCityTemperatures(dateStr)` | Batch-fetches 284 major cities' mean daytime temps for a date (parallel requests) |
+| `showWorldMap(lat, lon)` | Renders + fades world map overlay; fetches heatmap grid if not cached; animates dot if map already visible |
+| `drawWorldMapBackground(ctx, polygons, bounds, extraDots, heatmap)` | Draws heatmap overlay (if data provided) + country outlines + extra dots |
+| `drawCityDot(ctx, lat, lon, bounds)` | Draws temperature-colored city dot at given coordinates |
+| `drawWorldMap(ctx, polygons, lat, lon, bounds, extraDots, heatmap)` | Calls `drawWorldMapBackground` + `drawCityDot` |
+| `drawHeatmapOverlay(ctx, bounds, polygons, gridData)` | Renders smooth temperature color field clipped to land polygons via offscreen canvas |
+| `fetchHeatmapGrid(dateStr)` | Fetches 540-point temperature grid (11 batch API calls), caches by date |
+| `animateDotTransition(canvas, fromLat, fromLon, toLat, toLon, dur)` | RAF animation of city dot between two positions using ImageData caching |
 | `fetchYearBandData(cityKey)` | 3 API calls → merged 365-entry array `{date, tempC, tier, daylightFrac}` |
 | `drawYearBand()` | Canvas rendering of year band with color slices + daylight gradient + markers |
 | `initYearBandInteraction()` | Sets up click (navigate) + hover (tooltip) on year band |
@@ -262,3 +262,10 @@ Touch devices: arrows hidden, tap left/right third of sky to navigate days. Tool
 - Loading: shimmer skeleton with traveling gradient, 1.5s ease-in-out infinite animation.
 - Transitions: 0.25s ease on all interactive elements.
 - Auto-refreshes weather data every hour.
+
+## Overleaf Document
+- Overleaf project: "Weather flow"
+- Keep a log of changes in an appendix:
+  - start a new section for each 24h period. Draw a horizontal lines beween then. Make sure they all appear chronologically.
+  - Write the date and a description of both the requests and changes implemented. Separate them clearly.
+  - write the number of code lines.

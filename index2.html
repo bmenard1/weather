@@ -107,7 +107,6 @@
             margin: 0 auto;
             display: flex;
             flex-direction: column;
-            gap: 20px;
             position: relative;
             z-index: 2;
             /* Position the sky ribbon at the top of the wrapper */
@@ -160,9 +159,9 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 16px;
             position: relative;
         }
+        .day-selector-content > * + * { margin-left: 16px; }
 
         .selector-divider {
             display: none;
@@ -171,8 +170,8 @@
         .location-section {
             display: flex;
             align-items: center;
-            gap: 8px;
         }
+        .location-section > * + * { margin-left: 8px; }
 
         .random-btn {
             background: rgba(255, 255, 255, 0.06);
@@ -194,9 +193,9 @@
         .date-nav {
             display: flex;
             align-items: center;
-            gap: 8px;
             position: relative;
         }
+        .date-nav > * + * { margin-left: 8px; }
 
         .forecast-limit-msg {
             position: absolute;
@@ -438,13 +437,9 @@
                 bottom: 9px;
             }
 
-            .day-selector-content {
-                gap: 12px;
-            }
+            .day-selector-content > * + * { margin-left: 12px; }
 
-            .date-nav {
-                gap: 6px;
-            }
+            .date-nav > * + * { margin-left: 6px; }
 
             .day-label {
                 font-size: 0.8rem;
@@ -500,12 +495,10 @@
                 flex-direction: row;
                 justify-content: space-between;
                 padding: 0 15px;
-                gap: 10px;
             }
+            .day-selector-content > * + * { margin-left: 10px; }
 
-            .date-nav {
-                gap: 4px;
-            }
+            .date-nav > * + * { margin-left: 4px; }
 
             .day-label {
                 font-size: 0.8rem;
@@ -519,9 +512,7 @@
                 text-align: right;
             }
 
-            .location-section {
-                gap: 6px;
-            }
+            .location-section > * + * { margin-left: 6px; }
 
             .random-btn {
                 font-size: 0.6rem;
@@ -549,13 +540,9 @@
                 bottom: 0px;
             }
 
-            .day-selector-content {
-                gap: 10px;
-            }
+            .day-selector-content > * + * { margin-left: 10px; }
 
-            .date-nav {
-                gap: 4px;
-            }
+            .date-nav > * + * { margin-left: 4px; }
 
             .day-label, .city-label {
                 font-size: 0.75rem;
@@ -1000,12 +987,16 @@
             }
 
             // Fetch all batches in parallel
-            const batchResults = await Promise.allSettled(batches.map(async (batch) => {
-                const lats = batch.map(p => p.lat).join(',');
-                const lons = batch.map(p => p.lon).join(',');
-                const url = `${baseUrl}?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,is_day&start_date=${dateStr}&end_date=${dateStr}&timezone=auto`;
-                const resp = await fetch(url);
-                return { batch, json: await resp.json() };
+            const batchResults = await Promise.all(batches.map(async (batch) => {
+                try {
+                    const lats = batch.map(p => p.lat).join(',');
+                    const lons = batch.map(p => p.lon).join(',');
+                    const url = `${baseUrl}?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,is_day&start_date=${dateStr}&end_date=${dateStr}&timezone=auto`;
+                    const resp = await fetch(url);
+                    return { status: 'fulfilled', value: { batch, json: await resp.json() } };
+                } catch (e) {
+                    return { status: 'rejected' };
+                }
             }));
 
             batchResults.forEach(result => {
@@ -1802,7 +1793,7 @@
             try {
                 const futureData = await fetchWeatherData(cityKey, maxFutureOffset);
                 const todayData = await fetchWeatherData(cityKey, 0); // cache hit
-                if (!futureData?.temperature || !todayData?.temperature) return;
+                if (!futureData || !futureData.temperature || !todayData || !todayData.temperature) return;
 
                 let totalTemp = 0, count = 0;
                 for (const t of todayData.temperature) { totalTemp += t; count++; }
@@ -3196,7 +3187,17 @@
             // Clip to pill shape for the band area
             ctx.save();
             ctx.beginPath();
-            ctx.roundRect(0, bandTop, w, bandH, bandR);
+            // Manual roundRect for Safari 12 compatibility
+            var rr_x = 0, rr_y = bandTop, rr_w = w, rr_h = bandH, rr_r = bandR;
+            ctx.moveTo(rr_x + rr_r, rr_y);
+            ctx.lineTo(rr_x + rr_w - rr_r, rr_y);
+            ctx.arcTo(rr_x + rr_w, rr_y, rr_x + rr_w, rr_y + rr_r, rr_r);
+            ctx.lineTo(rr_x + rr_w, rr_y + rr_h - rr_r);
+            ctx.arcTo(rr_x + rr_w, rr_y + rr_h, rr_x + rr_w - rr_r, rr_y + rr_h, rr_r);
+            ctx.lineTo(rr_x + rr_r, rr_y + rr_h);
+            ctx.arcTo(rr_x, rr_y + rr_h, rr_x, rr_y + rr_h - rr_r, rr_r);
+            ctx.lineTo(rr_x, rr_y + rr_r);
+            ctx.arcTo(rr_x, rr_y, rr_x + rr_r, rr_y, rr_r);
             ctx.clip();
 
             // Draw each day as a vertical color slice with daylight-aware fade
@@ -4139,12 +4140,16 @@
             }
 
             // Fetch all batches in parallel
-            const batchResults = await Promise.allSettled(batches.map(async (batch) => {
-                const lats = batch.map(c => c.lat).join(',');
-                const lons = batch.map(c => c.lon).join(',');
-                const url = `${baseUrl}?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,is_day&start_date=${dateStr}&end_date=${dateStr}&timezone=auto`;
-                const resp = await fetch(url);
-                return { batch, json: await resp.json() };
+            const batchResults = await Promise.all(batches.map(async (batch) => {
+                try {
+                    const lats = batch.map(c => c.lat).join(',');
+                    const lons = batch.map(c => c.lon).join(',');
+                    const url = `${baseUrl}?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,is_day&start_date=${dateStr}&end_date=${dateStr}&timezone=auto`;
+                    const resp = await fetch(url);
+                    return { status: 'fulfilled', value: { batch, json: await resp.json() } };
+                } catch (e) {
+                    return { status: 'rejected' };
+                }
             }));
 
             batchResults.forEach(result => {
