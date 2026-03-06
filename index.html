@@ -679,7 +679,7 @@
             justify-content: center;
             pointer-events: none;
             opacity: 1;
-            transition: opacity 0.6s ease;
+            transition: opacity 1.2s ease;
         }
 
         .splash-title.hidden {
@@ -4411,9 +4411,11 @@
                 const ribbonRect = ribbon.getBoundingClientRect();
 
                 // Above the sky ribbon = from viewport top to ribbon top
+                const ribbonCenterX = (ribbonRect.left + ribbonRect.right) / 2;
+                const halfZone = ribbonRect.width / 4;
                 const isAboveRibbon = e.clientY < ribbonRect.top &&
-                                      e.clientX >= ribbonRect.left &&
-                                      e.clientX <= ribbonRect.right;
+                                      e.clientX >= ribbonCenterX - halfZone &&
+                                      e.clientX <= ribbonCenterX + halfZone;
 
                 if (isAboveRibbon) {
                     // Show title
@@ -4527,10 +4529,12 @@
                 document.querySelector('.day-selector').classList.add('visible');
             }
 
-            // Fade out splash title
+            // Fade out splash title (delay to keep visible longer)
             if (splash) {
-                splash.classList.add('hidden');
-                setTimeout(() => splash.remove(), 600);
+                setTimeout(() => {
+                    splash.classList.add('hidden');
+                    setTimeout(() => splash.remove(), 1200);
+                }, 600);
             }
 
             // Background: refine temp range, year band, prefetch
