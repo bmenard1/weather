@@ -85,6 +85,22 @@
             z-index: 10;
         }
 
+        /* Current time marker overlay on sky ribbon */
+        .time-marker {
+            position: absolute;
+            pointer-events: auto;
+            cursor: default;
+            z-index: 101;
+            font: 0.9rem system-ui, sans-serif;
+            color: rgba(255, 255, 255, 0.35);
+            white-space: nowrap;
+            display: none;
+        }
+        .time-marker.visible { display: flex; align-items: center; gap: 4px; }
+        .time-marker .arrow { font-size: 0.55rem; }
+        .time-marker .hour-label { opacity: 1; transition: opacity 5s ease; }
+        .time-marker .hour-label.faded { opacity: 0; }
+
         /* Tooltips - fixed on desktop for smooth tracking */
         .temp-tooltip, .sky-tooltip {
             position: fixed;
@@ -117,6 +133,7 @@
         .ribbon-row {
             display: flex;
             align-items: flex-start;
+            position: relative;
         }
 
         .ribbon-wrapper {
@@ -159,8 +176,9 @@
         .day-selector-content {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 16px;
+            gap: 24px;
+            width: 100%;
+            padding: 0 20px;
             position: relative;
         }
 
@@ -169,12 +187,23 @@
         }
 
         .location-section {
+            flex: 1;
             display: flex;
             align-items: center;
+            justify-content: flex-end;
             gap: 8px;
         }
 
+        .city-label-wrapper {
+            position: relative;
+        }
+
         .random-btn {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 12px;
             background: rgba(255, 255, 255, 0.06);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
@@ -184,6 +213,12 @@
             cursor: pointer;
             transition: all 0.25s ease;
             letter-spacing: 0.5px;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .location-section:hover .random-btn {
+            opacity: 1;
+            pointer-events: auto;
         }
 
         .random-btn:hover {
@@ -191,7 +226,52 @@
             border-color: rgba(255, 255, 255, 0.15);
             color: #e8eaef;
         }
+
+        .day-label-wrapper {
+            position: relative;
+        }
+
+        .week-btn {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 12px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            color: rgba(180, 190, 210, 0.7);
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            letter-spacing: 0.5px;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .date-nav:hover .week-btn {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .week-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #e8eaef;
+        }
+
+        #weekViewCanvas {
+            position: absolute;
+            z-index: 3;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            pointer-events: none;
+        }
+        #weekViewCanvas.visible {
+            opacity: 1;
+        }
+
         .date-nav {
+            flex: 1;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -354,7 +434,7 @@
         .year-band-container {
             width: 100%;
             max-width: 1200px;
-            margin: 20px auto 0;
+            margin: 30px auto 0;
             height: 18px;
             cursor: pointer;
             opacity: 0;
@@ -795,6 +875,7 @@
         </div>
         <canvas id="tempCurveCanvas"></canvas>
         <canvas id="windCanvas"></canvas>
+        <canvas id="weekViewCanvas"></canvas>
         <div id="tempCurveOverlay"></div>
         <div class="temp-tooltip" id="tempTooltip"></div>
 
@@ -803,21 +884,27 @@
                 <div class="ribbon-wrapper dynamic-height">
                     <canvas id="skyRibbon" class="ribbon-canvas"></canvas>
                 </div>
+                <div class="time-marker" id="timeMarker"></div>
             </div>
         </div>
         <div class="sky-tooltip" id="skyTooltip"></div>
 
         <div class="day-selector">
             <div class="day-selector-content">
+                <div class="location-section">
+                    <div class="city-label-wrapper">
+                        <span class="city-label" id="cityLabel">Tokyo</span>
+                        <button class="random-btn" id="randomBtn">random</button>
+                        <!-- <button class="random-btn" id="similarBtn">similar</button> -->
+                    </div>
+                </div>
                 <div class="date-nav">
                     <button class="day-arrow" id="prevDay">&#8592;</button>
-                    <span class="day-label" id="dayLabel">Today</span>
+                    <div class="day-label-wrapper">
+                        <span class="day-label" id="dayLabel">Today</span>
+                        <button class="week-btn" id="weekBtn">week</button>
+                    </div>
                     <button class="day-arrow" id="nextDay">&#8594;</button>
-                </div>
-                <div class="location-section">
-                    <span class="city-label" id="cityLabel">Tokyo</span>
-                    <button class="random-btn" id="randomBtn">random</button>
-                    <!-- <button class="random-btn" id="similarBtn">similar</button> -->
                 </div>
             </div>
         </div>
@@ -1588,6 +1675,11 @@
                 const response = await fetch(url);
                 const data = await response.json();
 
+                // Resolve 'auto' timezone from API response (e.g. map-click cities)
+                if (city.timezone === 'auto' && data.timezone) {
+                    city.timezone = data.timezone;
+                }
+
                 // Parse sunrise/sunset times to hours
                 const sunriseTime = new Date(data.daily.sunrise[0]);
                 const sunsetTime = new Date(data.daily.sunset[0]);
@@ -1763,9 +1855,9 @@
 
             if (count > 0) {
                 const meanTemp = totalTemp / count;
-                // Mean - 15°C to Mean + 22.5°C (asymmetric range, 50% larger)
-                // In normalized space: 15°C = 15/60, 22.5°C = 22.5/60
-                const rangeBelow = 15 / 60;
+                // Mean - 10°C to Mean + 22.5°C (asymmetric range)
+                // In normalized space: 10°C = 10/60, 22.5°C = 22.5/60
+                const rangeBelow = 10 / 60;
                 const rangeAbove = 22.5 / 60;
                 tempDisplayMin = Math.max(0, meanTemp - rangeBelow);
                 tempDisplayMax = Math.min(1, meanTemp + rangeAbove);
@@ -1790,7 +1882,7 @@
                 totalTemp += temp;
             }
             const meanTemp = totalTemp / dayData.temperature.length;
-            const rangeBelow = 15 / 60;
+            const rangeBelow = 10 / 60;
             const rangeAbove = 22.5 / 60;
             tempDisplayMin = Math.max(0, meanTemp - rangeBelow);
             tempDisplayMax = Math.min(1, meanTemp + rangeAbove);
@@ -1809,7 +1901,7 @@
                 for (const t of futureData.temperature) { totalTemp += t; count++; }
 
                 const meanTemp = totalTemp / count;
-                const newMin = Math.max(0, meanTemp - 15 / 60);
+                const newMin = Math.max(0, meanTemp - 10 / 60);
                 const newMax = Math.min(1, meanTemp + 22.5 / 60);
 
                 if (Math.abs(newMin - tempDisplayMin) > 0.01 || Math.abs(newMax - tempDisplayMax) > 0.01) {
@@ -2487,6 +2579,8 @@
                 });
             }
 
+            // Time marker is handled via DOM element (see updateTimeMarker)
+
         }
 
         // Temperature color mapping (global for tooltip use)
@@ -2731,7 +2825,7 @@
             }
 
             // Add tick marks at key temperatures if within display range
-            const tickTemps = [0, 10, 20, 40];
+            const tickTemps = [0, 10, 20, 30, 40];
             tickTemps.forEach(tempC => {
                 const tempNorm = (tempC + 25) / 60;
                 if (tempNorm >= tempDisplayMin && tempNorm <= tempDisplayMax) {
@@ -2743,51 +2837,7 @@
                 }
             });
 
-            // Draw current time marker (only for today's view)
-            // Positioned above the sky ribbon
-            if (currentDayOffset === 0) {
-                const city = cities[currentCity];
-                const now = new Date();
-                // Get current hour and minute in the city's timezone
-                const timeOpts = { hour12: false, hour: '2-digit', minute: '2-digit' };
-                if (city.timezone && city.timezone !== 'auto') timeOpts.timeZone = city.timezone;
-                const timeStr = now.toLocaleTimeString('en-US', timeOpts);
-                const [hours, minutes] = timeStr.split(':').map(Number);
-                const currentHour = hours + minutes / 60;
-
-                // Map current time to position within the display range (not full 24h)
-                // displayStartHour and displayEndHour define the visible range
-                const displayHours = displayEndHour - displayStartHour;
-                const currentTimeT = (currentHour - displayStartHour) / displayHours;
-
-                // Only draw marker if current time is within the displayed range
-                if (currentTimeT >= 0 && currentTimeT <= 1) {
-                    // Calculate X position within the ribbon bounds
-                    const markerX = ribbonLeft + currentTimeT * ribbonWidth;
-
-                    // Get the actual position of the sky ribbon element relative to wrapper
-                    const skyTopInWrapper = (skyRect.top - wrapperRect.top) - 2;
-
-                    // Draw a refined triangle marker with soft glow
-                    // Outer glow
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-                    ctx.beginPath();
-                    ctx.moveTo(markerX, skyTopInWrapper + 1);
-                    ctx.lineTo(markerX - 7, skyTopInWrapper - 10);
-                    ctx.lineTo(markerX + 7, skyTopInWrapper - 10);
-                    ctx.closePath();
-                    ctx.fill();
-
-                    // Inner triangle
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                    ctx.beginPath();
-                    ctx.moveTo(markerX, skyTopInWrapper);
-                    ctx.lineTo(markerX - 4, skyTopInWrapper - 7);
-                    ctx.lineTo(markerX + 4, skyTopInWrapper - 7);
-                    ctx.closePath();
-                    ctx.fill();
-                }
-            }
+            // Current time marker is drawn on sky ribbon canvas (see drawSkyRibbon)
         }
 
         // Wind animation state
@@ -3426,6 +3476,101 @@
         }
 
         // Initialize all visualizations (static, no animation)
+        let timeMarkerFadeTimer = null;
+
+        function updateTimeMarker() {
+            const marker = document.getElementById('timeMarker');
+            if (!marker) return;
+
+            // Clear any pending fade
+            if (timeMarkerFadeTimer) {
+                clearTimeout(timeMarkerFadeTimer);
+                timeMarkerFadeTimer = null;
+            }
+
+            if (currentDayOffset !== 0) {
+                marker.classList.remove('visible');
+                return;
+            }
+
+            const city = cities[currentCity];
+            const now = new Date();
+            const timeOpts = { hour12: false, hour: '2-digit', minute: '2-digit' };
+            if (city.timezone && city.timezone !== 'auto') timeOpts.timeZone = city.timezone;
+            const timeStr = now.toLocaleTimeString('en-US', timeOpts);
+            const [hrs, mins] = timeStr.split(':').map(Number);
+            const currentHour = hrs + mins / 60;
+            const hourLabel = `<span class="hour-label">${hrs}:${String(mins).padStart(2, '0')}</span>`;
+
+            const dspHours = displayEndHour - displayStartHour;
+            const currentTimeT = (currentHour - displayStartHour) / dspHours;
+
+            const ribbon = document.getElementById('skyRibbon');
+            const ribbonWidth = ribbon.parentElement.offsetWidth;
+
+            if (currentTimeT >= 0 && currentTimeT <= 1) {
+                // Within range: downward triangle + hidden hour above ribbon
+                const x = currentTimeT * ribbonWidth;
+                marker.innerHTML = hourLabel + ' ▼';
+                marker.style.top = '-18px';
+                marker.style.left = x + 'px';
+                marker.style.right = 'auto';
+                marker.style.transform = 'translateX(-50%)';
+                marker.style.color = 'rgba(255, 255, 255, 0.5)';
+                marker.style.fontSize = '';
+                // Start hour label hidden for in-range indicator
+                const inLabel = marker.querySelector('.hour-label');
+                if (inLabel) {
+                    inLabel.style.transition = 'none';
+                    inLabel.classList.add('faded');
+                    requestAnimationFrame(() => { inLabel.style.transition = ''; });
+                }
+            } else if (currentTimeT < 0) {
+                // Before range: left arrow + hour above ribbon
+                marker.innerHTML = '<span class="arrow">◀</span>' + hourLabel;
+                marker.style.top = '-20px';
+                marker.style.left = '4px';
+                marker.style.right = 'auto';
+                marker.style.transform = 'none';
+                marker.style.color = 'rgba(255, 255, 255, 0.3)';
+                marker.style.fontSize = '';
+            } else {
+                // After range: hour + right arrow above ribbon
+                marker.innerHTML = hourLabel + '<span class="arrow">▶</span>';
+                marker.style.top = '-20px';
+                marker.style.right = '4px';
+                marker.style.left = 'auto';
+                marker.style.transform = 'none';
+                marker.style.color = 'rgba(255, 255, 255, 0.3)';
+                marker.style.fontSize = '';
+            }
+            marker.classList.add('visible');
+
+            // Schedule hour label fade-out after 10s (same as year band)
+            timeMarkerFadeTimer = setTimeout(() => {
+                timeMarkerFadeTimer = null;
+                const label = marker.querySelector('.hour-label');
+                if (label) label.classList.add('faded');
+            }, 10000);
+        }
+
+        // Reveal hour label briefly on hover over time marker
+        document.getElementById('timeMarker').addEventListener('mouseenter', () => {
+            const marker = document.getElementById('timeMarker');
+            const label = marker.querySelector('.hour-label');
+            if (!label || !label.classList.contains('faded')) return; // already visible
+            // Fast reveal
+            label.style.transition = 'opacity 0.3s ease';
+            label.classList.remove('faded');
+            // Schedule re-fade after 3s
+            if (timeMarkerFadeTimer) clearTimeout(timeMarkerFadeTimer);
+            timeMarkerFadeTimer = setTimeout(() => {
+                timeMarkerFadeTimer = null;
+                label.style.transition = 'opacity 3s ease';
+                label.classList.add('faded');
+            }, 3000);
+        });
+
         function draw() {
             // Draw sky ribbon first so its dimensions are available for temperature curve positioning
             drawSkyRibbon();
@@ -3434,6 +3579,7 @@
             drawTemperatureCurve();
             drawYearBand();
             startWindAnimation();
+            updateTimeMarker();
         }
 
         // Handle resize with debounce
@@ -3739,6 +3885,183 @@
             // Show world map overlay with the chosen city
             showWorldMap(randomCapital.lat, randomCapital.lon);
         });
+
+        // Week view: show 5 stacked temperature curves
+        let weekViewTimer = null;
+        let weekViewFadeTimer = null;
+
+        async function showWeekView() {
+            // Cancel any existing timers
+            if (weekViewTimer) { clearTimeout(weekViewTimer); weekViewTimer = null; }
+            if (weekViewFadeTimer) { clearTimeout(weekViewFadeTimer); weekViewFadeTimer = null; }
+
+            const canvas = document.getElementById('weekViewCanvas');
+            const ctx = canvas.getContext('2d');
+            const skyRibbonEl = document.getElementById('skyRibbon');
+            const wrapper = document.getElementById('weatherDisplayWrapper');
+            const skyRect = skyRibbonEl.getBoundingClientRect();
+            const wrapperRect = wrapper.getBoundingClientRect();
+
+            // Position and size relative to the sky ribbon
+            const ribbonLeft = skyRect.left - wrapperRect.left;
+            const ribbonWidth = skyRect.width;
+            const rowHeight = 36;
+            const rowGap = 2;
+            const numDays = 4; // Next 4 days (today is already shown)
+            const padding = 8;
+            const totalHeight = numDays * rowHeight + (numDays - 1) * rowGap + padding * 2;
+            const labelWidth = 42;
+
+            // Position canvas over the sky ribbon
+            canvas.style.top = (skyRect.top - wrapperRect.top) + 'px';
+            canvas.style.left = ribbonLeft + 'px';
+            canvas.style.width = ribbonWidth + 'px';
+            canvas.style.height = totalHeight + 'px';
+            canvas.width = ribbonWidth * 2;
+            canvas.height = totalHeight * 2;
+            ctx.setTransform(2, 0, 0, 2, 0, 0);
+
+            // Dark background with rounded corners
+            ctx.fillStyle = 'rgba(13, 17, 23, 0.92)';
+            ctx.beginPath();
+            ctx.roundRect(0, 0, ribbonWidth, totalHeight, 20);
+            ctx.fill();
+
+            // Glow layers matching drawTemperatureCurve
+            const glowLayers = [
+                { width: 8, alpha: 0.08 },
+                { width: 4, alpha: 0.18 },
+                { width: 2, alpha: 0.85 },
+                { width: 0.8, alpha: 0.5, highlight: true }
+            ];
+
+            // Fetch & draw each day (skip today, start at +1)
+            const city = cities[currentCity];
+            for (let i = 0; i < numDays; i++) {
+                const offset = currentDayOffset + 1 + i;
+                let dayData;
+                try {
+                    dayData = await fetchWeatherData(currentCity, offset);
+                } catch (e) { break; }
+                if (!dayData || !dayData.temperature) break;
+
+                // Use the main display's time range so all curves share the same time axis
+                const startHour = displayStartHour;
+                const endHour = displayEndHour;
+                const displayHours = endHour - startHour;
+
+                const rowTop = padding + (numDays - 1 - i) * (rowHeight + rowGap);
+                const curveBottom = rowTop + rowHeight - 4;
+                const curveYRange = rowHeight - 8;
+                const curveLeft = labelWidth;
+                const curveWidth = ribbonWidth - labelWidth - 10;
+
+                // Build curve data pixel-by-pixel with daylight brightness
+                const fullTemp = dayData.temperature;
+                const fullDaylight = dayData.daylight;
+                const curveData = [];
+                for (let x = 0; x <= curveWidth; x++) {
+                    const t = x / curveWidth;
+                    const hour = startHour + t * displayHours;
+
+                    // Catmull-Rom for temperature
+                    const idx1 = Math.min(23, Math.max(0, Math.floor(hour)));
+                    const idx0 = Math.max(0, idx1 - 1);
+                    const idx2 = Math.min(23, idx1 + 1);
+                    const idx3 = Math.min(23, idx1 + 2);
+                    const frac = hour - idx1;
+                    const p0 = fullTemp[idx0], p1 = fullTemp[idx1], p2 = fullTemp[idx2], p3 = fullTemp[idx3];
+                    const tt = frac * frac, ttt = tt * frac;
+                    const tempValue = 0.5 * ((2 * p1) + (-p0 + p2) * frac + (2 * p0 - 5 * p1 + 4 * p2 - p3) * tt + (-p0 + 3 * p1 - 3 * p2 + p3) * ttt);
+
+                    // Linear interpolation for daylight
+                    const di = Math.min(23, Math.max(0, Math.floor(hour)));
+                    const dFrac = hour - di;
+                    const dayValue = fullDaylight[di] + (fullDaylight[Math.min(23, di + 1)] - fullDaylight[di]) * dFrac;
+                    const brightness = getDaylightBrightness(dayValue);
+
+                    const color = getTempColor(tempValue);
+                    const y = curveBottom - (mapTempToDisplayRange(tempValue) * curveYRange);
+                    curveData.push({ x: curveLeft + x, y, color, brightness, tempValue });
+                }
+
+                // Draw fill with brightness-aware gradient (matching main curve)
+                curveData.forEach(d => {
+                    const gradient = ctx.createLinearGradient(d.x, d.y, d.x, curveBottom);
+                    for (let s = 0; s <= 8; s++) {
+                        const gt = s / 8;
+                        gradient.addColorStop(gt, colorToString(d.color, 0.35 * d.brightness * Math.pow(1 - gt, 2.5)));
+                    }
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(d.x, d.y, 1.5, curveBottom - d.y);
+                });
+
+                // Draw glow layers with brightness-weighted width + dash pattern
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                glowLayers.forEach(layer => {
+                    let dashOff = 0;
+                    for (let j = 0; j < curveData.length - 1; j++) {
+                        const d1 = curveData[j], d2 = curveData[j + 1];
+                        const c = layer.highlight
+                            ? { r: Math.min(255, d1.color.r + 40), g: Math.min(255, d1.color.g + 40), b: Math.min(255, d1.color.b + 40) }
+                            : d1.color;
+
+                        const widthScale = 0.4 + 0.6 * d1.brightness;
+                        ctx.lineWidth = layer.width * widthScale;
+                        ctx.strokeStyle = colorToString(c, layer.alpha * d1.brightness);
+
+                        const dashPattern = getTempDashPattern(d1.tempValue);
+                        if (dashPattern) {
+                            const segLength = Math.sqrt(Math.pow(d2.x - d1.x, 2) + Math.pow(d2.y - d1.y, 2));
+                            const [dashLen, gapLen] = dashPattern;
+                            const posInCycle = dashOff % (dashLen + gapLen);
+                            if (posInCycle < dashLen) {
+                                ctx.setLineDash([]);
+                                ctx.beginPath();
+                                ctx.moveTo(d1.x, d1.y);
+                                ctx.lineTo(d2.x, d2.y);
+                                ctx.stroke();
+                            }
+                            dashOff += segLength;
+                        } else {
+                            ctx.setLineDash([]);
+                            ctx.beginPath();
+                            ctx.moveTo(d1.x, d1.y);
+                            ctx.lineTo(d2.x, d2.y);
+                            ctx.stroke();
+                            dashOff = 0;
+                        }
+                    }
+                });
+                ctx.setLineDash([]);
+
+                // Day label
+                const dateStr = getDateForOffset(city, offset);
+                const date = new Date(dateStr + 'T12:00:00');
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                ctx.fillStyle = 'rgba(160, 170, 190, 0.5)';
+                ctx.font = '11px system-ui, -apple-system, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(dayName, 10, rowTop + rowHeight / 2);
+            }
+
+            // Show with fade-in
+            canvas.classList.add('visible');
+
+            // Auto-hide after 5 seconds
+            weekViewTimer = setTimeout(() => {
+                weekViewTimer = null;
+                canvas.classList.remove('visible');
+                weekViewFadeTimer = setTimeout(() => {
+                    weekViewFadeTimer = null;
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }, 800);
+            }, 5000);
+        }
+
+        document.getElementById('weekBtn').addEventListener('click', showWeekView);
 
         /* // Handle similar capitals button — commented out for now
         const similarCache = {};
@@ -4245,8 +4568,10 @@
         tempOverlay.addEventListener('mousemove', (e) => {
             // Get sky ribbon bounds in screen coordinates (for mouse position comparison)
             const skyRibbonEl = document.getElementById('skyRibbon');
+            const wrapper = document.getElementById('weatherDisplayWrapper');
             const daySelectorEl = document.querySelector('.day-selector');
             const skyRect = skyRibbonEl.getBoundingClientRect();
+            const wrapperRect = wrapper.getBoundingClientRect();
             const daySelectorRect = daySelectorEl.getBoundingClientRect();
             const ribbonLeft = skyRect.left;  // Screen coordinates for mouse comparison
             const ribbonWidth = skyRect.width;
@@ -4258,6 +4583,51 @@
             if (mouseY >= daySelectorRect.top - 10) {
                 tempTooltip.style.display = 'none';
                 return;
+            }
+
+            // Compute reference bar position (same as drawTemperatureCurve)
+            const height = wrapperRect.height || window.innerHeight * 0.6;
+            const skyBottomInWrapper = skyRect.bottom - wrapperRect.top;
+            const curveHeight = Math.min(height * 0.396, 216);
+            const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
+            const refLineXScreen = (skyRect.left + skyRect.right) / 2;
+            const refLineTopScreen = wrapperRect.top + curveBottom - (1.0 * curveHeight * 0.8);
+            const refLineBottomScreen = wrapperRect.top + curveBottom;
+
+            // Check if mouse is near the reference bar (within 20px horizontally)
+            const nearRefBar = Math.abs(mouseX - refLineXScreen) < 20
+                && mouseY >= refLineTopScreen - 10
+                && mouseY <= refLineBottomScreen + 10;
+
+            if (nearRefBar) {
+                // Check if mouse is near the actual temperature curve at this X
+                const tCurve = (mouseX - ribbonLeft) / ribbonWidth;
+                const curveTempAtX = interpolateDataSmooth(weatherData.temperature, tCurve, true);
+                const curveYAtX = wrapperRect.top + curveBottom - (mapTempToDisplayRange(curveTempAtX) * curveHeight * 0.8);
+                const nearCurve = Math.abs(mouseY - curveYAtX) < 15;
+
+                if (!nearCurve) {
+                    // Show ref bar tooltip: just the temperature at pointer height
+                    const yFrac = Math.max(0, Math.min(1, (mouseY - refLineTopScreen) / (refLineBottomScreen - refLineTopScreen)));
+                    const tempNorm = tempDisplayMax - yFrac * (tempDisplayMax - tempDisplayMin);
+                    const tempCelsius = tempNorm * 60 - 25;
+                    const tempColor = getTempColor(tempNorm);
+                    const colorStr = `rgb(${Math.round(tempColor.r)}, ${Math.round(tempColor.g)}, ${Math.round(tempColor.b)})`;
+
+                    tempTooltip.style.background = 'none';
+                    tempTooltip.style.border = 'none';
+                    tempTooltip.style.boxShadow = 'none';
+                    tempTooltip.style.backdropFilter = 'none';
+                    tempTooltip.style.padding = '0';
+                    tempTooltip.style.transform = 'translateY(-50%)';
+                    tempTooltip.style.marginTop = '0';
+                    tempTooltip.innerHTML = `<span style="color: ${colorStr}; font-size: 0.8rem;">${Math.round(tempCelsius)}°C</span>`;
+                    tempTooltip.style.left = `${mouseX + 14}px`;
+                    tempTooltip.style.top = `${mouseY}px`;
+                    tempTooltip.style.display = 'block';
+                    return;
+                }
+                // If near the curve, fall through to normal curve tooltip
             }
 
             // Calculate position along the ribbon (0 to 1)
@@ -4288,6 +4658,13 @@
             }
 
             // Display the tooltip with hour on first line, temperature on second
+            tempTooltip.style.background = '';
+            tempTooltip.style.border = '';
+            tempTooltip.style.boxShadow = '';
+            tempTooltip.style.backdropFilter = '';
+            tempTooltip.style.padding = '';
+            tempTooltip.style.transform = '';
+            tempTooltip.style.marginTop = '';
             tempTooltip.innerHTML = `<div class="tooltip-hour">${hourStr}</div><div class="tooltip-value">${tempInfo}</div>`;
             tempTooltip.style.left = `${mouseX}px`;
             tempTooltip.style.top = `${mouseY}px`;
