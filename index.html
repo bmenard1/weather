@@ -174,12 +174,9 @@
         }
 
         .day-selector-content {
-            display: flex;
-            align-items: center;
-            gap: 24px;
-            width: 100%;
-            padding: 0 20px;
             position: relative;
+            width: 100%;
+            height: 44px;
         }
 
         .selector-divider {
@@ -187,11 +184,10 @@
         }
 
         .location-section {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 8px;
+            position: absolute;
+            left: calc(39.6% - 60px);
+            top: 50%;
+            transform: translate(-50%, -50%);
         }
 
         .city-label-wrapper {
@@ -211,14 +207,15 @@
             font-size: 0.7rem;
             padding: 4px 10px;
             cursor: pointer;
-            transition: all 0.25s ease;
+            transition: opacity 0.8s ease, background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
             letter-spacing: 0.5px;
             opacity: 0;
             pointer-events: none;
         }
-        .location-section:hover .random-btn {
+        .random-btn.shown {
             opacity: 1;
             pointer-events: auto;
+            transition: opacity 0.25s ease, background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
         }
 
         .random-btn:hover {
@@ -229,6 +226,7 @@
 
         .day-label-wrapper {
             position: relative;
+            text-align: center;
         }
 
         .week-btn {
@@ -244,18 +242,44 @@
             font-size: 0.7rem;
             padding: 4px 10px;
             cursor: pointer;
-            transition: all 0.25s ease;
+            transition: opacity 0.8s ease, background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
             letter-spacing: 0.5px;
             opacity: 0;
             pointer-events: none;
         }
-        .date-nav:hover .week-btn {
+        .week-btn.shown {
             opacity: 1;
             pointer-events: auto;
+            transition: opacity 0.25s ease, background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
         }
         .week-btn:hover {
             background: rgba(255, 255, 255, 0.12);
             border-color: rgba(255, 255, 255, 0.15);
+            color: #e8eaef;
+        }
+
+        .unit-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: none;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            color: rgba(180, 190, 210, 0.5);
+            font-size: 0.8rem;
+            padding: 4px 10px;
+            cursor: pointer;
+            transition: opacity 0.3s ease, background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+            letter-spacing: 0.5px;
+            opacity: 0;
+        }
+        .unit-btn.shown {
+            opacity: 1;
+        }
+        .unit-btn:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.08);
             color: #e8eaef;
         }
 
@@ -271,11 +295,10 @@
         }
 
         .date-nav {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            position: relative;
+            position: absolute;
+            left: calc(60.4% + 60px);
+            top: 50%;
+            transform: translate(-50%, -50%);
         }
 
         .forecast-limit-msg {
@@ -299,6 +322,11 @@
             transition: all 0.25s ease;
             text-align: center;
             letter-spacing: 0.5px;
+            background: none;
+            border: 1px solid transparent;
+            font: inherit;
+            appearance: none;
+            -webkit-appearance: none;
         }
         .city-label:hover, .day-label:hover {
             background: rgba(255, 255, 255, 0.08);
@@ -325,12 +353,33 @@
             opacity: 0;
             animation: fadeIn 0.3s ease forwards;
             white-space: nowrap;
+            background: none;
+            border: none;
+            font: inherit;
         }
         .set-default-btn:hover {
             color: rgba(255, 255, 255, 0.9);
         }
         @keyframes fadeIn {
             to { opacity: 1; }
+        }
+
+        button:focus-visible,
+        .city-label:focus-visible,
+        .day-label:focus-visible,
+        .set-default-btn:focus-visible,
+        .city-input:focus-visible {
+            outline: 2px solid rgba(190, 210, 245, 0.9);
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
         }
 
         .city-input {
@@ -396,23 +445,28 @@
         }
 
         .day-arrow {
-            width: 36px;
-            height: 36px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.06);
-            color: rgba(180, 190, 210, 0.8);
-            font-size: 1.2rem;
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 52px;
+            height: 28px;
+            border: 1px solid transparent;
+            border-radius: 14px;
+            background: none;
+            color: rgba(180, 190, 210, 0.5);
+            font-size: 1rem;
             cursor: pointer;
-            transition: all 0.25s ease;
+            transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
             display: flex;
             align-items: center;
             justify-content: center;
         }
+        #prevDay { left: max(calc(50% + 45px), calc(60.4% - 60px)); }
+        #nextDay { left: calc(60.4% + 180px); }
 
         .day-arrow:hover:not(:disabled) {
-            background: rgba(255, 255, 255, 0.12);
-            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.08);
             color: #e8eaef;
         }
 
@@ -776,7 +830,7 @@
             font-weight: 500;
             font-size: 3.2rem;
             color: rgb(30, 80, 160);
-            letter-spacing: 0.18em;
+            letter-spacing: 0.12em;
             line-height: 1;
             white-space: nowrap;
             text-transform: lowercase;
@@ -784,10 +838,10 @@
 
         .splash-title .splash-sub {
             font-family: 'Avenir Next', 'Avenir', sans-serif;
-            font-weight: 500;
+            font-weight: 600;
             font-size: 0.78rem;
-            letter-spacing: 0.22em;
-            color: rgb(30, 80, 160);
+            letter-spacing: 0.15em;
+            color: rgb(20, 60, 135);
             margin-top: -2px;
             margin-left: 1rem;
             text-align: left;
@@ -833,7 +887,7 @@
             font-weight: 500;
             font-size: 3.2rem;
             color: rgb(30, 80, 160);
-            letter-spacing: 0.18em;
+            letter-spacing: 0.12em;
             line-height: 1;
             white-space: nowrap;
             text-transform: lowercase;
@@ -841,10 +895,10 @@
 
         .hover-title .hover-sub {
             font-family: 'Avenir Next', 'Avenir', sans-serif;
-            font-weight: 500;
+            font-weight: 600;
             font-size: 0.78rem;
-            letter-spacing: 0.22em;
-            color: rgb(30, 80, 160);
+            letter-spacing: 0.15em;
+            color: rgb(20, 60, 135);
             margin-top: -2px;
             margin-left: 1rem;
             text-align: left;
@@ -863,12 +917,36 @@
             }
         }
 
+        /* Subtitle slide animation */
+        .splash-title .splash-sub,
+        .hover-title .hover-sub {
+            overflow: hidden;
+            position: relative;
+        }
+        .splash-title .splash-sub span,
+        .hover-title .hover-sub span {
+            display: inline-block;
+            transition: transform 1.2s ease-out, opacity 0.6s ease;
+        }
+        .splash-title .splash-sub span.slide-out,
+        .hover-title .hover-sub span.slide-out {
+            transform: translateX(-120%);
+            opacity: 0;
+            transition: transform 1.2s ease-in, opacity 0.8s ease;
+        }
+        .splash-title .splash-sub span.slide-in-from-right,
+        .hover-title .hover-sub span.slide-in-from-right {
+            transform: translateX(120%);
+            opacity: 0;
+            transition: none;
+        }
+
     </style>
 </head>
 <body>
     <div class="weather-display-wrapper" id="weatherDisplayWrapper">
-        <div class="splash-title" id="splashTitle"><div class="splash-inner"><div class="splash-main">weather flow</div><div class="splash-sub">forecast <span style="opacity:1">w</span><span style="opacity:0.95">i</span><span style="opacity:0.91">t</span><span style="opacity:0.86">h</span><span style="opacity:0.81">o</span><span style="opacity:0.77">u</span><span style="opacity:0.72">t</span><span style="opacity:0.67"> </span><span style="opacity:0.63">n</span><span style="opacity:0.58">u</span><span style="opacity:0.53">m</span><span style="opacity:0.49">b</span><span style="opacity:0.44">e</span><span style="opacity:0.39">r</span><span style="opacity:0.35">s</span></div></div></div>
-        <div class="hover-title" id="hoverTitle"><div class="hover-inner"><div class="hover-main">weather flow</div><div class="hover-sub">forecast <span style="opacity:1">w</span><span style="opacity:0.95">i</span><span style="opacity:0.91">t</span><span style="opacity:0.86">h</span><span style="opacity:0.81">o</span><span style="opacity:0.77">u</span><span style="opacity:0.72">t</span><span style="opacity:0.67"> </span><span style="opacity:0.63">n</span><span style="opacity:0.58">u</span><span style="opacity:0.53">m</span><span style="opacity:0.49">b</span><span style="opacity:0.44">e</span><span style="opacity:0.39">r</span><span style="opacity:0.35">s</span></div></div></div>
+        <div class="splash-title" id="splashTitle"><div class="splash-inner"><div class="splash-main">weather flow</div><div class="splash-sub" id="splashSub"></div></div></div>
+        <div class="hover-title" id="hoverTitle"><div class="hover-inner"><div class="hover-main">weather flow</div><div class="hover-sub" id="hoverSub"></div></div></div>
         <div class="loading-overlay" id="loadingOverlay">
             <div class="loading-skeleton"></div>
             <div class="loading-curve" id="loadingCurve"></div>
@@ -893,18 +971,19 @@
             <div class="day-selector-content">
                 <div class="location-section">
                     <div class="city-label-wrapper">
-                        <span class="city-label" id="cityLabel">Tokyo</span>
-                        <button class="random-btn" id="randomBtn">random</button>
+                        <button type="button" class="city-label" id="cityLabel" aria-label="Choose city">Tokyo</button>
+                        <button type="button" class="random-btn" id="randomBtn" aria-label="Pick random city">random</button>
                         <!-- <button class="random-btn" id="similarBtn">similar</button> -->
                     </div>
                 </div>
+                <button type="button" class="unit-btn" id="unitBtn" aria-label="Toggle temperature unit">°C</button>
+                <button type="button" class="day-arrow" id="prevDay" aria-label="Previous day">&#8592;</button>
+                <button type="button" class="day-arrow" id="nextDay" aria-label="Next day">&#8594;</button>
                 <div class="date-nav">
-                    <button class="day-arrow" id="prevDay">&#8592;</button>
                     <div class="day-label-wrapper">
-                        <span class="day-label" id="dayLabel">Today</span>
-                        <button class="week-btn" id="weekBtn">week</button>
+                        <button type="button" class="day-label" id="dayLabel" aria-label="Jump to today">Today</button>
+                        <button type="button" class="week-btn" id="weekBtn" aria-label="Show week preview">week</button>
                     </div>
-                    <button class="day-arrow" id="nextDay">&#8594;</button>
                 </div>
             </div>
         </div>
@@ -1030,6 +1109,256 @@
             { name: 'Andorra la Vella', lat: 42.51, lon: 1.52, timezone: 'Europe/Andorra' }
         ];
 
+        // ---- Shared date/time + network helpers ----
+        const USER_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const dateFormatterCache = {};
+        const DEFAULT_FETCH_TIMEOUT_MS = 12000;
+        const DEFAULT_FETCH_RETRIES = 1;
+        const MAX_WEATHER_CACHE_ENTRIES = 500;
+        const MAX_YEAR_BAND_CACHE_ENTRIES = 64;
+        const MAX_HEATMAP_CACHE_ENTRIES = 60;
+        const MAX_DYNAMIC_CITIES = 250;
+
+        function pad2(n) {
+            return String(n).padStart(2, '0');
+        }
+
+        function getDateFormatter(timeZone) {
+            if (!dateFormatterCache[timeZone]) {
+                dateFormatterCache[timeZone] = new Intl.DateTimeFormat('en-US', {
+                    timeZone,
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                });
+            }
+            return dateFormatterCache[timeZone];
+        }
+
+        function formatDateInTimeZone(date, timeZone) {
+            const parts = getDateFormatter(timeZone).formatToParts(date);
+            let year = '', month = '', day = '';
+            for (const part of parts) {
+                if (part.type === 'year') year = part.value;
+                else if (part.type === 'month') month = part.value;
+                else if (part.type === 'day') day = part.value;
+            }
+            return `${year}-${month}-${day}`;
+        }
+
+        function parseDateString(dateStr) {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            return { year, month, day };
+        }
+
+        function dateStringToUTCNoon(dateStr) {
+            const { year, month, day } = parseDateString(dateStr);
+            return new Date(Date.UTC(year, month - 1, day, 12));
+        }
+
+        function formatUTCDateString(date) {
+            return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+        }
+
+        function shiftDateString(dateStr, dayDelta) {
+            const dt = dateStringToUTCNoon(dateStr);
+            dt.setUTCDate(dt.getUTCDate() + dayDelta);
+            return formatUTCDateString(dt);
+        }
+
+        function diffDateStrings(dateA, dateB) {
+            const a = dateStringToUTCNoon(dateA);
+            const b = dateStringToUTCNoon(dateB);
+            return Math.round((a - b) / 86400000);
+        }
+
+        function getCityTimeZone(city) {
+            if (city && city.timezone && city.timezone !== 'auto') return city.timezone;
+            return USER_TIME_ZONE;
+        }
+
+        function touchOrder(order, key) {
+            const idx = order.indexOf(key);
+            if (idx !== -1) order.splice(idx, 1);
+            order.push(key);
+        }
+
+        function getBoundedCacheEntry(cacheObj, order, key) {
+            if (!Object.prototype.hasOwnProperty.call(cacheObj, key)) return null;
+            touchOrder(order, key);
+            return cacheObj[key];
+        }
+
+        function setBoundedCacheEntry(cacheObj, order, key, value, maxEntries) {
+            cacheObj[key] = value;
+            touchOrder(order, key);
+            while (order.length > maxEntries) {
+                const evictKey = order.shift();
+                delete cacheObj[evictKey];
+            }
+        }
+
+        function removeBoundedCacheEntry(cacheObj, order, key) {
+            if (Object.prototype.hasOwnProperty.call(cacheObj, key)) {
+                delete cacheObj[key];
+            }
+            const idx = order.indexOf(key);
+            if (idx !== -1) order.splice(idx, 1);
+        }
+
+        function isAbortError(error) {
+            return error && (error.name === 'AbortError' || error.code === 20);
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function mergeSignals(...signals) {
+            const active = signals.filter(Boolean);
+            if (active.length === 0) return { signal: undefined, cleanup: () => {} };
+
+            const controller = new AbortController();
+            const onAbort = () => controller.abort();
+
+            for (const sig of active) {
+                if (sig.aborted) {
+                    controller.abort();
+                    break;
+                }
+                sig.addEventListener('abort', onAbort, { once: true });
+            }
+
+            return {
+                signal: controller.signal,
+                cleanup: () => {
+                    for (const sig of active) {
+                        sig.removeEventListener('abort', onAbort);
+                    }
+                }
+            };
+        }
+
+        async function fetchWithTimeout(url, options = {}) {
+            const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, signal, ...fetchOptions } = options;
+            const timeoutController = new AbortController();
+            const merged = mergeSignals(signal, timeoutController.signal);
+            const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
+            try {
+                return await fetch(url, { ...fetchOptions, signal: merged.signal });
+            } finally {
+                clearTimeout(timer);
+                merged.cleanup();
+            }
+        }
+
+        function shouldRetryStatus(status) {
+            return status === 408 || status === 425 || status === 429 || status >= 500;
+        }
+
+        async function fetchJsonWithRetry(url, options = {}) {
+            const {
+                retries = DEFAULT_FETCH_RETRIES,
+                timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+                signal,
+                ...fetchOptions
+            } = options;
+
+            let lastError = null;
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                try {
+                    const response = await fetchWithTimeout(url, { ...fetchOptions, signal, timeoutMs });
+                    if (!response.ok) {
+                        const err = new Error(`HTTP ${response.status} for ${url}`);
+                        err.status = response.status;
+                        throw err;
+                    }
+                    return await response.json();
+                } catch (error) {
+                    if (isAbortError(error)) throw error;
+                    lastError = error;
+                    const canRetry = attempt < retries &&
+                        ((error.status && shouldRetryStatus(error.status)) || !error.status);
+                    if (!canRetry) break;
+                    await delay(250 * (attempt + 1));
+                }
+            }
+            throw lastError || new Error(`Failed to fetch JSON: ${url}`);
+        }
+
+        async function fetchTextWithRetry(url, options = {}) {
+            const {
+                retries = DEFAULT_FETCH_RETRIES,
+                timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+                signal,
+                ...fetchOptions
+            } = options;
+
+            let lastError = null;
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                try {
+                    const response = await fetchWithTimeout(url, { ...fetchOptions, signal, timeoutMs });
+                    if (!response.ok) {
+                        const err = new Error(`HTTP ${response.status} for ${url}`);
+                        err.status = response.status;
+                        throw err;
+                    }
+                    return await response.text();
+                } catch (error) {
+                    if (isAbortError(error)) throw error;
+                    lastError = error;
+                    const canRetry = attempt < retries &&
+                        ((error.status && shouldRetryStatus(error.status)) || !error.status);
+                    if (!canRetry) break;
+                    await delay(250 * (attempt + 1));
+                }
+            }
+            throw lastError || new Error(`Failed to fetch text: ${url}`);
+        }
+
+        function addRafMousemoveListener(target, handler) {
+            let rafId = null;
+            let lastEvent = null;
+            target.addEventListener('mousemove', (e) => {
+                lastEvent = e;
+                if (rafId !== null) return;
+                rafId = requestAnimationFrame(() => {
+                    rafId = null;
+                    if (lastEvent) handler(lastEvent);
+                });
+            });
+        }
+
+        const BUILTIN_CITY_KEYS = new Set(Object.keys(cities));
+        let dynamicCityKeys = [];
+
+        function cleanupCachesForCity(cityKey) {
+            removeBoundedCacheEntry(yearBandCache, yearBandCacheOrder, cityKey);
+            Object.keys(weatherCache).forEach(cacheKey => {
+                if (cacheKey.startsWith(`${cityKey}-`)) {
+                    removeBoundedCacheEntry(weatherCache, weatherCacheOrder, cacheKey);
+                }
+            });
+        }
+
+        function pruneDynamicCities() {
+            while (dynamicCityKeys.length > MAX_DYNAMIC_CITIES) {
+                const evictIdx = dynamicCityKeys.findIndex(k => k !== currentCity);
+                if (evictIdx === -1) break;
+                const [evictKey] = dynamicCityKeys.splice(evictIdx, 1);
+                delete cities[evictKey];
+                cleanupCachesForCity(evictKey);
+            }
+        }
+
+        function addOrUpdateCity(cityKey, cityData) {
+            cities[cityKey] = cityData;
+            if (!BUILTIN_CITY_KEYS.has(cityKey)) {
+                touchOrder(dynamicCityKeys, cityKey);
+                pruneDynamicCities();
+            }
+        }
+
         // ── World Map Overlay ──────────────────────────────────────────
         let worldMapPolygons = null; // Cached decoded polygons
         let mapFadeTimeout = null;
@@ -1041,7 +1370,46 @@
 
         // Heatmap overlay state
         let heatmapGridCache = {};     // dateStr → 2D array [row][col] of tempC
+        const heatmapGridCacheOrder = [];
         let currentHeatmapGrid = null; // currently loaded grid data
+        let heatmapFadeTimeout = null; // 3s delay before fade starts
+        let heatmapFadeAnimId = null;  // RAF id for fade animation
+
+        // Fade out heatmap over ~1 second, leaving only outlines + city dot
+        function startHeatmapFade(canvas) {
+            if (heatmapFadeAnimId) { cancelAnimationFrame(heatmapFadeAnimId); heatmapFadeAnimId = null; }
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            const duration = 1000;
+            const startTime = performance.now();
+            function frame(now) {
+                const elapsed = now - startTime;
+                const t = Math.min(1, elapsed / duration);
+                const alpha = 1 - t; // 1 → 0
+                ctx.setTransform(2, 0, 0, 2, 0, 0);
+                ctx.clearRect(0, 0, rect.width, rect.height);
+                drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots, currentHeatmapGrid, alpha);
+                if (t < 1) {
+                    heatmapFadeAnimId = requestAnimationFrame(frame);
+                } else {
+                    heatmapFadeAnimId = null;
+                }
+            }
+            heatmapFadeAnimId = requestAnimationFrame(frame);
+        }
+
+        function cancelHeatmapFade() {
+            if (heatmapFadeTimeout) { clearTimeout(heatmapFadeTimeout); heatmapFadeTimeout = null; }
+            if (heatmapFadeAnimId) { cancelAnimationFrame(heatmapFadeAnimId); heatmapFadeAnimId = null; }
+        }
+
+        function scheduleHeatmapFade(canvas) {
+            cancelHeatmapFade();
+            heatmapFadeTimeout = setTimeout(() => {
+                heatmapFadeTimeout = null;
+                startHeatmapFade(canvas);
+            }, 3000);
+        }
         const HEATMAP_LAT_MIN = -60, HEATMAP_LAT_MAX = 80;
         const HEATMAP_LON_MIN = -180, HEATMAP_LON_MAX = 170;
         const HEATMAP_STEP = 10;
@@ -1050,7 +1418,8 @@
 
         // Fetch temperature grid for heatmap overlay
         async function fetchHeatmapGrid(dateStr) {
-            if (heatmapGridCache[dateStr]) return heatmapGridCache[dateStr];
+            const cachedGrid = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
+            if (cachedGrid) return cachedGrid;
 
             // Generate grid points
             const gridPoints = [];
@@ -1065,9 +1434,8 @@
             }
 
             // Choose API based on date
-            const today = new Date();
-            const target = new Date(dateStr + 'T00:00:00');
-            const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+            const todayDateStr = formatDateInTimeZone(new Date(), USER_TIME_ZONE);
+            const diffDays = diffDateStrings(dateStr, todayDateStr);
             const isHistorical = diffDays < -5;
             const baseUrl = isHistorical
                 ? 'https://archive-api.open-meteo.com/v1/archive'
@@ -1091,8 +1459,8 @@
                 const lats = batch.map(p => p.lat).join(',');
                 const lons = batch.map(p => p.lon).join(',');
                 const url = `${baseUrl}?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,is_day&start_date=${dateStr}&end_date=${dateStr}&timezone=auto`;
-                const resp = await fetch(url);
-                return { batch, json: await resp.json() };
+                const json = await fetchJsonWithRetry(url, { retries: 1, timeoutMs: 15000 });
+                return { batch, json };
             }));
 
             batchResults.forEach(result => {
@@ -1123,7 +1491,7 @@
                 }
             });
 
-            heatmapGridCache[dateStr] = grid;
+            setBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr, grid, MAX_HEATMAP_CACHE_ENTRIES);
             return grid;
         }
 
@@ -1131,8 +1499,10 @@
         async function fetchWorldMapData() {
             if (worldMapPolygons) return worldMapPolygons;
             try {
-                const resp = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
-                const topo = await resp.json();
+                const topo = await fetchJsonWithRetry('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json', {
+                    retries: 2,
+                    timeoutMs: 15000
+                });
                 worldMapPolygons = decodeTopoJSON(topo);
                 return worldMapPolygons;
             } catch (e) {
@@ -1199,8 +1569,11 @@
         async function reverseGeocode(lat, lon) {
             try {
                 const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&accept-language=en`;
-                const resp = await fetch(url, { headers: { 'User-Agent': 'WeatherFlow/1.0' } });
-                const data = await resp.json();
+                const data = await fetchJsonWithRetry(url, {
+                    retries: 1,
+                    timeoutMs: 12000,
+                    headers: { 'Accept-Language': 'en' }
+                });
                 const name = data.address.city || data.address.town || data.address.village
                     || data.address.county || data.address.state || data.address.country || `${lat.toFixed(1)}°, ${lon.toFixed(1)}°`;
                 return name;
@@ -1269,13 +1642,17 @@
 
         // Draw the world map with country outlines and city marker
         // Draw country outlines + extra dots (background layer, no main city dot)
-        function drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData) {
+        function drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData, heatmapAlpha) {
             // Draw heatmap underneath if active
-            if (heatmapGridData) {
+            if (heatmapGridData && (heatmapAlpha === undefined || heatmapAlpha > 0.01)) {
+                ctx.save();
+                ctx.globalAlpha = heatmapAlpha !== undefined ? heatmapAlpha : 1;
                 drawHeatmapOverlay(ctx, mapBounds, polygons, heatmapGridData);
+                ctx.restore();
             }
 
-            ctx.strokeStyle = heatmapGridData ? 'rgba(100, 130, 180, 0.5)' : 'rgba(100, 130, 180, 0.3)';
+            const hasHeatmap = heatmapGridData && (heatmapAlpha === undefined || heatmapAlpha > 0.01);
+            ctx.strokeStyle = hasHeatmap ? 'rgba(100, 130, 180, 0.5)' : 'rgba(100, 130, 180, 0.3)';
             ctx.lineWidth = 0.5;
             polygons.forEach(ring => {
                 if (ring.length < 3) return;
@@ -1327,14 +1704,14 @@
         }
 
         // Draw full world map (background + city dot)
-        function drawWorldMap(ctx, polygons, cityLat, cityLon, mapBounds, extraDots, heatmapGridData) {
-            drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData);
+        function drawWorldMap(ctx, polygons, cityLat, cityLon, mapBounds, extraDots, heatmapGridData, heatmapAlpha) {
+            drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData, heatmapAlpha);
             drawCityDot(ctx, cityLat, cityLon, mapBounds);
         }
 
         // Animate dot from one position to another on the map
         let dotAnimationId = null;
-        function animateDotTransition(canvas, fromLat, fromLon, toLat, toLon, duration) {
+        function animateDotTransition(canvas, fromLat, fromLon, toLat, toLon, duration, showHeatmap) {
             if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
             const ctx = canvas.getContext('2d');
             const rect = canvas.getBoundingClientRect();
@@ -1344,7 +1721,7 @@
             // Draw background once and cache as ImageData
             ctx.setTransform(2, 0, 0, 2, 0, 0);
             ctx.clearRect(0, 0, mapWidth, mapHeight);
-            drawWorldMapBackground(ctx, worldMapPolygons, currentMapBounds, currentExtraDots, currentHeatmapGrid);
+            drawWorldMapBackground(ctx, worldMapPolygons, currentMapBounds, currentExtraDots, showHeatmap ? currentHeatmapGrid : null);
             const baseImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
             const startTime = performance.now();
@@ -1378,6 +1755,7 @@
             if (mapFadeTimeout) { clearTimeout(mapFadeTimeout); mapFadeTimeout = null; }
             if (mapClearTimeout) { clearTimeout(mapClearTimeout); mapClearTimeout = null; }
             if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
+            cancelHeatmapFade();
 
             const canvas = document.getElementById('worldMapCanvas');
             const mapAlreadyVisible = canvas.classList.contains('visible') && currentMapBounds && currentMapLat !== null;
@@ -1393,10 +1771,14 @@
             // Fetch heatmap grid for current date (skip if already cached for this date)
             const city = cities[currentCity];
             const dateStr = getDateForOffset(city, currentDayOffset);
-            if (heatmapGridCache[dateStr]) {
-                currentHeatmapGrid = heatmapGridCache[dateStr];
+            const cachedHeatmap = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
+            if (cachedHeatmap) {
+                currentHeatmapGrid = cachedHeatmap;
             } else {
-                fetchHeatmapGrid(dateStr).then(grid => {
+                const requestedDateStr = dateStr;
+                fetchHeatmapGrid(requestedDateStr).then(grid => {
+                    const latestDateStr = getDateForOffset(cities[currentCity], currentDayOffset);
+                    if (latestDateStr !== requestedDateStr) return;
                     currentHeatmapGrid = grid;
                     // Redraw map with heatmap if still visible
                     if (canvas.classList.contains('visible') && currentMapBounds && worldMapPolygons) {
@@ -1409,9 +1791,10 @@
                 }).catch(e => console.error('Heatmap fetch failed:', e));
             }
 
-            // If map is already visible, animate the dot instead of rebuilding
+            // If map is already visible, animate the dot (outlines only, no heatmap)
             if (mapAlreadyVisible) {
-                animateDotTransition(canvas, prevLat, prevLon, cityLat, cityLon, 800);
+                cancelHeatmapFade();
+                animateDotTransition(canvas, prevLat, prevLon, cityLat, cityLon, 800, false);
                 showYearBand();
                 scheduleMapFadeOut(canvas);
                 return;
@@ -1465,8 +1848,10 @@
             canvas.classList.add('visible');
             showYearBand();
 
-            // After 8 seconds, fade out
+            // After 8 seconds, fade out entire map
             scheduleMapFadeOut(canvas);
+            // After 3 seconds, fade out heatmap colors (keep outlines)
+            scheduleHeatmapFade(canvas);
         }
 
         // Schedule the map fade-out timer
@@ -1480,6 +1865,7 @@
                 // Clean up after the 5s fade-out transition completes
                 mapClearTimeout = setTimeout(() => {
                     if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
+                    cancelHeatmapFade();
                     canvas.style.pointerEvents = '';
                     currentMapBounds = null;
                     currentMapLat = null;
@@ -1571,12 +1957,12 @@
 
             // Create a new city entry with auto timezone
             const cityKey = name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now();
-            cities[cityKey] = {
+            addOrUpdateCity(cityKey, {
                 name: name,
                 lat: roundedLat,
                 lon: roundedLon,
                 timezone: 'auto'
-            };
+            });
             currentCity = cityKey;
             currentDayOffset = 0;
 
@@ -1586,11 +1972,15 @@
             prefetchRemainingDays(cityKey);
         });
 
-        // Cache for fetched weather data (keyed by city-dayOffset)
+        // Cache for fetched weather data (keyed by city-dateStr)
+        // Each entry: { data: weatherData, fetchedAt: timestamp }
         const weatherCache = {};
+        const weatherCacheOrder = [];
+        const CACHE_MAX_AGE = 60 * 60 * 1000; // 1 hour in ms
 
         // Year band data cache (keyed by cityKey)
         const yearBandCache = {};
+        const yearBandCacheOrder = [];
         let yearBandCity = null; // Track which city the current band is for
 
         // Load saved default city from localStorage
@@ -1601,7 +1991,7 @@
                     const cityData = JSON.parse(saved);
                     // Add to cities if not a built-in city
                     if (!cities[cityData.key]) {
-                        cities[cityData.key] = cityData.data;
+                        addOrUpdateCity(cityData.key, cityData.data);
                     }
                     return cityData.key;
                 }
@@ -1623,8 +2013,16 @@
             }
         }
 
+        // Temperature unit (persisted)
+        let useFahrenheit = localStorage.getItem('useFahrenheit') === 'true';
+        function displayTemp(celsius) {
+            return useFahrenheit ? Math.round(celsius * 9/5 + 32) : Math.round(celsius);
+        }
+        function tempUnit() { return useFahrenheit ? '°F' : '°C'; }
+
         // Current state
-        let currentCity = loadDefaultCity();
+        let currentCity = null;
+        currentCity = loadDefaultCity();
         let currentDayOffset = 0; // 0 = today, positive = future, negative = past
         const maxFutureOffset = 14; // Today + 14 days ahead (API limit)
         const historyBatchSize = 7; // Days to prefetch when going back in time
@@ -1635,26 +2033,28 @@
 
         // Helper to get date string for a given offset from today in city's timezone
         function getDateForOffset(city, dayOffset) {
-            const now = new Date();
-            const opts = city.timezone && city.timezone !== 'auto' ? { timeZone: city.timezone } : {};
-            const cityDateStr = now.toLocaleDateString('en-CA', opts);
-            const cityToday = new Date(cityDateStr + 'T00:00:00');
-            const targetDate = new Date(cityToday);
-            targetDate.setDate(targetDate.getDate() + dayOffset);
-            return targetDate.toISOString().split('T')[0];
+            const tz = getCityTimeZone(city);
+            const cityTodayStr = formatDateInTimeZone(new Date(), tz);
+            return shiftDateString(cityTodayStr, dayOffset);
         }
 
         // Fetch weather data from Open-Meteo API (forecast or historical)
-        async function fetchWeatherData(cityKey, dayOffset = 0) {
+        async function fetchWeatherData(cityKey, dayOffset = 0, options = {}) {
+            const { signal } = options;
             const city = cities[cityKey];
             const dateStr = getDateForOffset(city, dayOffset);
 
             // Cache key uses the actual date to ensure correct data
             const cacheKey = `${cityKey}-${dateStr}`;
 
-            // Return cached data if available and has all required fields
-            if (weatherCache[cacheKey] && weatherCache[cacheKey].precipMm && weatherCache[cacheKey].snowCm) {
-                return weatherCache[cacheKey];
+            // Return cached data if available, complete, and less than 1 hour old
+            const cached = getBoundedCacheEntry(weatherCache, weatherCacheOrder, cacheKey);
+            if (cached && cached.data && cached.data.precipMm && cached.data.snowCm &&
+                (Date.now() - cached.fetchedAt) < CACHE_MAX_AGE) {
+                return cached.data;
+            }
+            if (cached && (Date.now() - cached.fetchedAt) >= CACHE_MAX_AGE) {
+                removeBoundedCacheEntry(weatherCache, weatherCacheOrder, cacheKey);
             }
 
             // Use historical API for past dates (more than 5 days ago), forecast API otherwise
@@ -1669,11 +2069,22 @@
                 ? 'temperature_2m,cloud_cover,rain,snowfall,precipitation,wind_speed_10m,wind_direction_10m'
                 : 'temperature_2m,cloud_cover,rain,snowfall,precipitation,precipitation_probability,wind_speed_10m,wind_direction_10m,is_day';
 
-            const url = `${baseUrl}?latitude=${city.lat}&longitude=${city.lon}&hourly=${hourlyParams}&daily=sunrise,sunset&timezone=${encodeURIComponent(city.timezone)}&start_date=${dateStr}&end_date=${dateStr}`;
+            // Request 2 days so temperature spline can look ahead past hour 23
+            const nextDateStr = getDateForOffset(city, dayOffset + 1);
+            const apiTz = city.timezone === 'auto' ? 'auto' : getCityTimeZone(city);
+            const url = `${baseUrl}?latitude=${city.lat}&longitude=${city.lon}&hourly=${hourlyParams}&daily=sunrise,sunset&timezone=${encodeURIComponent(apiTz)}&start_date=${dateStr}&end_date=${nextDateStr}`;
 
             try {
-                const response = await fetch(url);
-                const data = await response.json();
+                const data = await fetchJsonWithRetry(url, {
+                    retries: 1,
+                    timeoutMs: 15000,
+                    signal
+                });
+
+                // Check for API error response (e.g. rate limit)
+                if (data.error || !data.hourly) {
+                    throw new Error(data.reason || 'Invalid API response');
+                }
 
                 // Resolve 'auto' timezone from API response (e.g. map-click cities)
                 if (city.timezone === 'auto' && data.timezone) {
@@ -1681,15 +2092,32 @@
                 }
 
                 // Parse sunrise/sunset times to hours
-                const sunriseTime = new Date(data.daily.sunrise[0]);
-                const sunsetTime = new Date(data.daily.sunset[0]);
-                const sunriseHour = sunriseTime.getHours() + sunriseTime.getMinutes() / 60;
-                const sunsetHour = sunsetTime.getHours() + sunsetTime.getMinutes() / 60;
+                let sunriseHour, sunsetHour;
+                if (data.daily && data.daily.sunrise && data.daily.sunset) {
+                    const sunriseTime = new Date(data.daily.sunrise[0]);
+                    const sunsetTime = new Date(data.daily.sunset[0]);
+                    sunriseHour = sunriseTime.getHours() + sunriseTime.getMinutes() / 60;
+                    sunsetHour = sunsetTime.getHours() + sunsetTime.getMinutes() / 60;
+                } else {
+                    // Derive from is_day hourly field (first 24 hours only)
+                    const isDay = data.hourly && data.hourly.is_day ? data.hourly.is_day.slice(0, 24) : null;
+                    if (isDay) {
+                        sunriseHour = 6; sunsetHour = 18; // defaults
+                        for (let i = 1; i < isDay.length; i++) {
+                            if (isDay[i] === 1 && isDay[i - 1] === 0) { sunriseHour = i - 0.5; break; }
+                        }
+                        for (let i = isDay.length - 1; i > 0; i--) {
+                            if (isDay[i] === 0 && isDay[i - 1] === 1) { sunsetHour = i - 0.5; break; }
+                        }
+                    } else {
+                        sunriseHour = 6; sunsetHour = 18;
+                    }
+                }
 
                 // Generate daylight array based on sunrise/sunset using smooth cosine curve
                 // This creates a natural bell curve for daylight intensity
                 const daylight = [];
-                const transitionDuration = 1.5; // hours for dawn/dusk transition
+                const transitionDuration = 1.2; // hours for dawn/dusk transition
                 for (let hour = 0; hour < 24; hour++) {
                     let value;
                     if (hour < sunriseHour - transitionDuration) {
@@ -1713,37 +2141,43 @@
                     daylight.push(value);
                 }
 
+                // Slice all arrays to 24 hours (API may return 48 due to 2-day fetch)
+                const h24 = arr => arr.slice(0, 24);
+
                 // Normalize cloud cover (0-100 -> 0-1)
-                const clouds = data.hourly.cloud_cover.map(c => c / 100);
+                const clouds = h24(data.hourly.cloud_cover.map(c => c / 100));
 
                 // Use precipitation field as primary source (works for all forecast days)
                 // precipitation = total water equivalent in mm (rain + melted snow)
                 // Fall back to rain field if precipitation is not available
-                const precipMm = data.hourly.precipitation || data.hourly.rain;
+                const precipMm = h24(data.hourly.precipitation || data.hourly.rain);
 
                 // Normalize precipitation for visual rendering (mm -> 0-1, capped at 10mm = 1)
                 // Use precipitation field instead of rain for consistent display across all days
                 const rain = precipMm.map(p => Math.min(1, p / 10));
 
                 // Normalize snowfall (cm -> 0-1, capped at 5cm = 1)
-                const snowfall = data.hourly.snowfall.map(s => Math.min(1, s / 5));
+                const snowfallAll = data.hourly.snowfall.map(s => Math.min(1, s / 5));
+                const snowfall = h24(snowfallAll);
                 const hasSnow = snowfall.some(s => s > 0);
                 // Keep raw snow values (cm) for display
-                const snowCm = data.hourly.snowfall;
+                const snowCm = h24(data.hourly.snowfall);
 
                 // Normalize temperature (-25°C to 50°C+ -> 0 to 1.25)
-                const temperature = data.hourly.temperature_2m.map(t => {
+                // Keep all hours (may be 48 if 2-day fetch) for spline lookahead
+                const temperatureAll = data.hourly.temperature_2m.map(t => {
                     return Math.max(0, (t + 25) / 60);
                 });
+                const temperature = temperatureAll.slice(0, 24);
 
                 // Get precipitation probability (0-100%) - keep hourly array
-                const precipProbability = data.hourly.precipitation_probability || new Array(24).fill(0);
+                const precipProbability = h24(data.hourly.precipitation_probability || new Array(48).fill(0));
 
                 // Wind speed (km/h) - normalize to 0-1 (0 = calm, 1 = 80+ km/h strong wind)
-                const windSpeedRaw = data.hourly.wind_speed_10m || new Array(24).fill(0);
+                const windSpeedRaw = h24(data.hourly.wind_speed_10m || new Array(48).fill(0));
                 const windSpeed = windSpeedRaw.map(w => Math.min(1, w / 80));
                 // Wind direction (degrees, 0 = North, 90 = East, etc.)
-                const windDirection = data.hourly.wind_direction_10m || new Array(24).fill(0);
+                const windDirection = h24(data.hourly.wind_direction_10m || new Array(48).fill(0));
 
                 const weatherData = {
                     daylight,
@@ -1753,6 +2187,7 @@
                     snow: hasSnow ? snowfall : null,
                     snowCm,
                     temperature,
+                    temperatureExtended: temperatureAll, // 24-48 hours for spline lookahead
                     precipProbability,
                     windSpeed,
                     windSpeedRaw,
@@ -1761,11 +2196,18 @@
                     sunsetHour
                 };
 
-                // Cache the result
-                weatherCache[cacheKey] = weatherData;
+                // Cache the result with timestamp
+                setBoundedCacheEntry(
+                    weatherCache,
+                    weatherCacheOrder,
+                    cacheKey,
+                    { data: weatherData, fetchedAt: Date.now() },
+                    MAX_WEATHER_CACHE_ENTRIES
+                );
                 return weatherData;
 
             } catch (error) {
+                if (isAbortError(error)) throw error;
                 console.error('Failed to fetch weather data:', error);
                 const z = new Array(24).fill(0);
                 return {
@@ -1819,6 +2261,10 @@
         let tempRangeCity = null; // Track which city the temp range was calculated for
         let tempRangeBaseOffset = 0; // Track which day offset the temp range was calculated for
 
+        // Guard against stale async refreshes
+        let refreshRequestToken = 0;
+        let activeRefreshController = null;
+
         // Map a normalized temperature (0-1) to display Y position fraction
         // Returns 0 at tempDisplayMin and 1 at tempDisplayMax
         function mapTempToDisplayRange(tempValue) {
@@ -1828,7 +2274,8 @@
 
         // Calculate mean temperature across sample days for a location
         // baseOffset: the day offset to center the calculation around (0 for today, -30 for 30 days ago, etc.)
-        async function calculateLocationTempRange(cityKey, baseOffset = 0) {
+        async function calculateLocationTempRange(cityKey, baseOffset = 0, options = {}) {
+            const { signal, refreshToken = null } = options;
             let totalTemp = 0;
             let count = 0;
 
@@ -1838,8 +2285,9 @@
                 : [baseOffset, baseOffset + 14]; // For historical, sample 2 weeks ahead from base
 
             for (const day of sampleDays) {
+                if (refreshToken !== null && refreshToken !== refreshRequestToken) return false;
                 try {
-                    const dayData = await fetchWeatherData(cityKey, day);
+                    const dayData = await fetchWeatherData(cityKey, day, { signal });
                     if (dayData && dayData.temperature) {
                         // Sum all hourly temperatures
                         for (const temp of dayData.temperature) {
@@ -1848,12 +2296,14 @@
                         }
                     }
                 } catch (e) {
+                    if (isAbortError(e)) throw e;
                     // Skip days that fail to fetch
                     console.log(`Skipped day ${day} for temp range calculation`);
                 }
             }
 
             if (count > 0) {
+                if (refreshToken !== null && refreshToken !== refreshRequestToken) return false;
                 const meanTemp = totalTemp / count;
                 // Mean - 10°C to Mean + 22.5°C (asymmetric range)
                 // In normalized space: 10°C = 10/60, 22.5°C = 22.5/60
@@ -1863,7 +2313,9 @@
                 tempDisplayMax = Math.min(1, meanTemp + rangeAbove);
                 tempRangeBaseOffset = baseOffset;
                 console.log(`Temp range for ${cityKey} (offset ${baseOffset}): mean=${((meanTemp * 60) - 25).toFixed(1)}°C, display range: ${((tempDisplayMin * 60) - 25).toFixed(1)}°C to ${((tempDisplayMax * 60) - 25).toFixed(1)}°C`);
+                return true;
             }
+            return false;
         }
 
         // Check if temp range needs recalculation based on day offset
@@ -1904,6 +2356,7 @@
                 const newMin = Math.max(0, meanTemp - 10 / 60);
                 const newMax = Math.min(1, meanTemp + 22.5 / 60);
 
+                if (cityKey !== currentCity) return;
                 if (Math.abs(newMin - tempDisplayMin) > 0.01 || Math.abs(newMax - tempDisplayMax) > 0.01) {
                     tempDisplayMin = newMin;
                     tempDisplayMax = newMax;
@@ -1914,57 +2367,57 @@
             }
         }
 
-        async function updateWeatherData(cityKey, dayOffset = 0) {
-            fullWeatherData = await fetchWeatherData(cityKey, dayOffset);
-            const { startHour, endHour } = getDisplayRange(fullWeatherData);
+        async function updateWeatherData(cityKey, dayOffset = 0, options = {}) {
+            const { signal, refreshToken = null } = options;
+            const nextFullWeatherData = await fetchWeatherData(cityKey, dayOffset, { signal });
+            if (refreshToken !== null && refreshToken !== refreshRequestToken) return false;
+
+            const { startHour, endHour } = getDisplayRange(nextFullWeatherData);
+            const nextWeatherData = {
+                daylight: sliceWeatherData(nextFullWeatherData.daylight, startHour, endHour),
+                clouds: sliceWeatherData(nextFullWeatherData.clouds, startHour, endHour),
+                rain: sliceWeatherData(nextFullWeatherData.rain, startHour, endHour),
+                precipMm: sliceWeatherData(nextFullWeatherData.precipMm, startHour, endHour),
+                precipProbability: sliceWeatherData(nextFullWeatherData.precipProbability, startHour, endHour),
+                snow: nextFullWeatherData.snow ? sliceWeatherData(nextFullWeatherData.snow, startHour, endHour) : null,
+                snowCm: sliceWeatherData(nextFullWeatherData.snowCm, startHour, endHour),
+                // Keep extended temperature data (24-48h) for proper Catmull-Rom interpolation at edges
+                temperatureFull: nextFullWeatherData.temperatureExtended || nextFullWeatherData.temperature,
+                temperature: sliceWeatherData(nextFullWeatherData.temperature, startHour, endHour),
+                windSpeed: sliceWeatherData(nextFullWeatherData.windSpeed, startHour, endHour),
+                windSpeedRaw: sliceWeatherData(nextFullWeatherData.windSpeedRaw, startHour, endHour),
+                windDirection: sliceWeatherData(nextFullWeatherData.windDirection, startHour, endHour),
+                sunriseHour: nextFullWeatherData.sunriseHour,
+                sunsetHour: nextFullWeatherData.sunsetHour
+            };
+            if (refreshToken !== null && refreshToken !== refreshRequestToken) return false;
 
             // Store display range for interpolation
             displayStartHour = startHour;
             displayEndHour = endHour;
-
-            weatherData = {
-                daylight: sliceWeatherData(fullWeatherData.daylight, startHour, endHour),
-                clouds: sliceWeatherData(fullWeatherData.clouds, startHour, endHour),
-                rain: sliceWeatherData(fullWeatherData.rain, startHour, endHour),
-                precipMm: sliceWeatherData(fullWeatherData.precipMm, startHour, endHour),
-                precipProbability: sliceWeatherData(fullWeatherData.precipProbability, startHour, endHour),
-                snow: fullWeatherData.snow ? sliceWeatherData(fullWeatherData.snow, startHour, endHour) : null,
-                snowCm: sliceWeatherData(fullWeatherData.snowCm, startHour, endHour),
-                // Keep full 24-hour temperature data for proper Catmull-Rom interpolation at edges
-                temperatureFull: fullWeatherData.temperature,
-                temperature: sliceWeatherData(fullWeatherData.temperature, startHour, endHour),
-                windSpeed: sliceWeatherData(fullWeatherData.windSpeed, startHour, endHour),
-                windSpeedRaw: sliceWeatherData(fullWeatherData.windSpeedRaw, startHour, endHour),
-                windDirection: sliceWeatherData(fullWeatherData.windDirection, startHour, endHour),
-                sunriseHour: fullWeatherData.sunriseHour,
-                sunsetHour: fullWeatherData.sunsetHour
-            };
+            fullWeatherData = nextFullWeatherData;
+            weatherData = nextWeatherData;
+            return true;
         }
 
         // Get day label for display
         function getDayLabel(dayOffset) {
-            if (dayOffset === 0) return 'Today';
-            if (dayOffset === 1) {
-                const date = new Date();
-                date.setDate(date.getDate() + 1);
-                const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-                return `Tomorrow ${dayName}`;
-            }
-            if (dayOffset === -1) {
-                const date = new Date();
-                date.setDate(date.getDate() - 1);
-                const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-                return `Yesterday ${dayName}`;
-            }
+            const city = cities[currentCity];
+            const cityTodayStr = getDateForOffset(city, 0);
+            const targetDateStr = getDateForOffset(city, dayOffset);
+            const targetDate = dateStringToUTCNoon(targetDateStr);
+            const dayName = targetDate.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+            const currentYear = parseDateString(cityTodayStr).year;
 
-            const date = new Date();
-            const currentYear = date.getFullYear();
-            date.setDate(date.getDate() + dayOffset);
+            if (dayOffset === 0) return 'Today';
+            if (dayOffset === 1) return `Tomorrow ${dayName}`;
+            if (dayOffset === -1) return `Yesterday ${dayName}`;
+
             // Include year if not current year
-            const options = date.getFullYear() !== currentYear
+            const options = parseDateString(targetDateStr).year !== currentYear
                 ? { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }
                 : { weekday: 'long', month: 'short', day: 'numeric' };
-            return date.toLocaleDateString('en-US', options);
+            return targetDate.toLocaleDateString('en-US', { ...options, timeZone: 'UTC' });
         }
 
         // Update the day label display
@@ -1982,40 +2435,56 @@
 
         // Loading state management
         let isLoading = false;
+        let loadingDelayTimer = null;
 
         function showLoading() {
             if (isLoading) return;
             isLoading = true;
-            const overlay = document.getElementById('loadingOverlay');
-            const loadingCurve = document.getElementById('loadingCurve');
+            // Delay showing overlay to avoid flash on fast loads
+            loadingDelayTimer = setTimeout(() => {
+                loadingDelayTimer = null;
+                if (!isLoading) return; // already hidden
+                const overlay = document.getElementById('loadingOverlay');
+                const loadingCurve = document.getElementById('loadingCurve');
 
-            // Position the loading curve to match temperature curve area
-            const wrapper = document.getElementById('weatherDisplayWrapper');
-            const skyRibbonEl = document.getElementById('skyRibbon');
-            if (skyRibbonEl && wrapper) {
-                const wrapperRect = wrapper.getBoundingClientRect();
-                const skyRect = skyRibbonEl.getBoundingClientRect();
-                const skyBottomInWrapper = skyRect.bottom - wrapperRect.top;
-                loadingCurve.style.top = `${skyBottomInWrapper - 40}px`;
-            } else {
-                loadingCurve.style.top = '180px';
-            }
+                // Position the loading curve to match temperature curve area
+                const wrapper = document.getElementById('weatherDisplayWrapper');
+                const skyRibbonEl = document.getElementById('skyRibbon');
+                if (skyRibbonEl && wrapper) {
+                    const wrapperRect = wrapper.getBoundingClientRect();
+                    const skyRect = skyRibbonEl.getBoundingClientRect();
+                    const skyBottomInWrapper = skyRect.bottom - wrapperRect.top;
+                    loadingCurve.style.top = `${skyBottomInWrapper - 40}px`;
+                } else {
+                    loadingCurve.style.top = '180px';
+                }
 
-            overlay.classList.add('visible');
+                overlay.classList.add('visible');
+            }, 200);
         }
 
         function hideLoading() {
             isLoading = false;
+            if (loadingDelayTimer) {
+                clearTimeout(loadingDelayTimer);
+                loadingDelayTimer = null;
+            }
             const overlay = document.getElementById('loadingOverlay');
             overlay.classList.remove('visible');
         }
 
-        // Check if weather data is already cached for a given city and day
+        // Check if weather data is already cached (and fresh) for a given city and day
         function isDataCached(cityKey, dayOffset) {
             const city = cities[cityKey];
             const dateStr = getDateForOffset(city, dayOffset);
             const cacheKey = `${cityKey}-${dateStr}`;
-            return weatherCache[cacheKey] && weatherCache[cacheKey].precipMm && weatherCache[cacheKey].snowCm;
+            const cached = getBoundedCacheEntry(weatherCache, weatherCacheOrder, cacheKey);
+            const isFresh = cached && cached.data && cached.data.precipMm && cached.data.snowCm &&
+                (Date.now() - cached.fetchedAt) < CACHE_MAX_AGE;
+            if (!isFresh && cached) {
+                removeBoundedCacheEntry(weatherCache, weatherCacheOrder, cacheKey);
+            }
+            return !!isFresh;
         }
 
         // Prefetch weather data in the background
@@ -2079,6 +2548,13 @@
         // Refresh the current view
         // skipTempRangeRecalc: if true, keeps the current temperature bar range unchanged
         async function refreshView(skipTempRangeRecalc = false) {
+            if (activeRefreshController) {
+                activeRefreshController.abort();
+            }
+            const refreshToken = ++refreshRequestToken;
+            const refreshController = new AbortController();
+            activeRefreshController = refreshController;
+
             // Check if temp range needs recalculation
             const needsTempRecalc = !skipTempRangeRecalc && (tempRangeCity !== currentCity || needsTempRangeRecalc(currentDayOffset));
             // Only show loading if data isn't already cached
@@ -2090,17 +2566,36 @@
                 // Recalculate temperature display range when city changes or every 30 days back
                 if (needsTempRecalc) {
                     const baseOffset = Math.floor(currentDayOffset / 30) * 30;
-                    await calculateLocationTempRange(currentCity, baseOffset);
+                    await calculateLocationTempRange(currentCity, baseOffset, {
+                        signal: refreshController.signal,
+                        refreshToken
+                    });
+                    if (refreshToken !== refreshRequestToken) return;
                     tempRangeCity = currentCity;
                 }
-                await updateWeatherData(currentCity, currentDayOffset);
+                const didUpdateWeather = await updateWeatherData(currentCity, currentDayOffset, {
+                    signal: refreshController.signal,
+                    refreshToken
+                });
+                if (!didUpdateWeather || refreshToken !== refreshRequestToken) return;
                 updateDayLabel();
                 draw();
 
                 // Fetch year band data when city changes (non-blocking)
                 if (yearBandCity !== currentCity) {
                     yearBandCity = currentCity;
-                    fetchYearBandData(currentCity).then(() => drawYearBand());
+                    const yearBandCityAtRequest = currentCity;
+                    fetchYearBandData(yearBandCityAtRequest, { signal: refreshController.signal })
+                        .then(() => {
+                            if (refreshToken === refreshRequestToken && yearBandCityAtRequest === currentCity) {
+                                drawYearBand();
+                            }
+                        })
+                        .catch((error) => {
+                            if (!isAbortError(error)) {
+                                console.error('Year band fetch failed:', error);
+                            }
+                        });
                 }
 
                 // Update heatmap if map is visible and day changed (non-blocking)
@@ -2108,21 +2603,34 @@
                 if (mapCanvas.classList.contains('visible') && currentMapBounds) {
                     const city = cities[currentCity];
                     const dateStr = getDateForOffset(city, currentDayOffset);
-                    if (heatmapGridCache[dateStr]) {
-                        currentHeatmapGrid = heatmapGridCache[dateStr];
+                    const cachedGrid = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
+                    if (cachedGrid) {
+                        currentHeatmapGrid = cachedGrid;
                         if (worldMapPolygons) resizeWorldMap();
                     } else {
                         fetchHeatmapGrid(dateStr).then(grid => {
+                            if (refreshToken !== refreshRequestToken) return;
                             currentHeatmapGrid = grid;
                             if (mapCanvas.classList.contains('visible') && currentMapBounds && worldMapPolygons) {
                                 resizeWorldMap();
                             }
+                        }).catch((error) => {
+                            if (!isAbortError(error)) {
+                                console.error('Heatmap fetch failed:', error);
+                            }
                         });
                     }
                 }
+            } catch (error) {
+                if (!isAbortError(error)) {
+                    console.error('Refresh failed:', error);
+                }
             } finally {
-                if (needsLoading) {
+                if (needsLoading && refreshToken === refreshRequestToken) {
                     hideLoading();
+                }
+                if (refreshToken === refreshRequestToken) {
+                    activeRefreshController = null;
                 }
             }
         }
@@ -2147,20 +2655,22 @@
         // For temperature data with useFullTemperatureData=true, uses full 24-hour data
         // to avoid edge flattening at display boundaries
         function interpolateDataSmooth(data, t, useFullTemperatureData = false) {
-            // For temperature: use full 24-hour data with hour-based indexing
+            // For temperature: use extended data (24-48h) with hour-based indexing
             if (useFullTemperatureData && weatherData.temperatureFull) {
                 const fullData = weatherData.temperatureFull;
+                const maxIdx = fullData.length - 1;
 
-                // Map t (0-1 over display range) to actual hour in 24-hour data
+                // Map t (0-1 over display range) to actual hour
+                // t can extend beyond [0,1] for curve padding beyond visible edges
                 const displayHours = displayEndHour - displayStartHour;
-                const hour = displayStartHour + t * displayHours;
+                const hour = Math.max(0, Math.min(maxIdx, displayStartHour + t * displayHours));
 
                 // Catmull-Rom needs 4 control points around the target hour
-                // Use proper indexing into full 24-hour array
-                const i1 = Math.min(23, Math.max(0, Math.floor(hour)));
+                // Extended data allows lookahead past hour 23 into next day
+                const i1 = Math.min(maxIdx, Math.max(0, Math.floor(hour)));
                 const i0 = Math.max(0, i1 - 1);
-                const i2 = Math.min(23, i1 + 1);
-                const i3 = Math.min(23, i1 + 2);
+                const i2 = Math.min(maxIdx, i1 + 1);
+                const i3 = Math.min(maxIdx, i1 + 2);
                 const frac = hour - i1;
 
                 // Get temperature values at these hours
@@ -2293,9 +2803,17 @@
 
             const ctx = canvas.getContext('2d');
             const width = wrapper.offsetWidth;
-            canvas.width = width * 2;
-            canvas.height = visibleHeight * 2;
-            ctx.scale(2, 2);
+            const newW = width * 2;
+            const newH = visibleHeight * 2;
+            if (canvas.width !== newW || canvas.height !== newH) {
+                canvas.width = newW;
+                canvas.height = newH;
+            } else {
+                // Clear without resetting canvas buffer (avoids visible blink)
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, newW, newH);
+            }
+            ctx.setTransform(2, 0, 0, 2, 0, 0);
 
             // We'll draw as if starting from cropAmount, so adjust all Y coordinates
             // by translating the context up
@@ -2509,7 +3027,7 @@
 
                                 // Gradient rain streak - brighter at top, fading at bottom
                                 const gradient = ctx.createLinearGradient(x, y, endX, endY);
-                                const r = 160, g = 195, b = 255;
+                                const r = 130, g = 175, b = 255;
                                 gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${layer.opacity * 0.3})`);
                                 gradient.addColorStop(0.2, `rgba(${r}, ${g}, ${b}, ${layer.opacity})`);
                                 gradient.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${layer.opacity * 0.6})`);
@@ -2664,12 +3182,19 @@
             // Calculate sky ribbon position relative to wrapper
             const skyBottomInWrapper = (skyRect.bottom - wrapperRect.top);
 
-            // Set canvas to wrapper size
-            canvas.width = width * 2;
-            canvas.height = height * 2;
-            canvas.style.width = width + 'px';
-            canvas.style.height = height + 'px';
-            ctx.scale(2, 2);
+            // Set canvas to wrapper size (skip dimension reset if unchanged to avoid blink)
+            const newW = width * 2;
+            const newH = height * 2;
+            if (canvas.width !== newW || canvas.height !== newH) {
+                canvas.width = newW;
+                canvas.height = newH;
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+            } else {
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, newW, newH);
+            }
+            ctx.setTransform(2, 0, 0, 2, 0, 0);
 
             // Draw the temperature curve with gradient fill
             const curveHeight = Math.min(height * 0.396, 216); // Curve height, capped (50% taller)
@@ -2686,18 +3211,31 @@
             const ribbonRight = skyRect.right - wrapperRect.left;
             const ribbonWidth = ribbonRight - ribbonLeft;
 
-            // Pre-calculate curve data for all x positions
-            const startX = Math.floor(ribbonLeft), endX = Math.ceil(ribbonRight);
+            // Pre-calculate curve data — extend 3 hours beyond each visible edge
+            // so the visible endpoints show mid-slope curve, not flattened endpoints
+            const padHours = 3;
+            const displayHours = displayEndHour - displayStartHour;
+            const padPx = Math.round(padHours / displayHours * ribbonWidth);
+            const startX = Math.floor(ribbonLeft) - padPx;
+            const endX = Math.ceil(ribbonRight) + padPx;
             const curveData = [];
             for (let x = startX; x < endX; x++) {
                 const t = (x - ribbonLeft) / ribbonWidth;
                 const tempValue = interpolateDataSmooth(weatherData.temperature, t, true);
-                const dayValue = interpolateData(weatherData.daylight, t);
+                // Clamp daylight lookup to visible range (extended pixels are nighttime anyway)
+                const tClamped = Math.max(0, Math.min(1, t));
+                const dayValue = interpolateData(weatherData.daylight, tClamped);
                 const brightness = getDaylightBrightness(dayValue);
                 const color = getTempColor(tempValue);
                 const y = curveBottom - (mapTempToDisplayRange(tempValue) * curveHeight * 0.8);
                 curveData.push({ x, y, color, brightness, tempValue });
             }
+
+            // Clip curve drawing to ribbon bounds (curve extends beyond for smooth edges)
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(Math.floor(ribbonLeft), 0, Math.ceil(ribbonWidth), height);
+            ctx.clip();
 
             // Draw filled area under curve (continuous shading for all temps)
             curveData.forEach(d => {
@@ -2774,6 +3312,7 @@
             });
 
             ctx.setLineDash([]); // Reset dash pattern
+            ctx.restore(); // Remove ribbon clip region
 
             // Draw temperature reference line at noon
             // Shows the limited range (tempDisplayMin to tempDisplayMax) using the same color coding
@@ -2843,7 +3382,10 @@
         // Wind animation state
         let windAnimationId = null;
         let windStreaks = [];
-        const WIND_THRESHOLD = 0.2; // Only show wind when > 20% of max (16+ km/h)
+        const WIND_THRESHOLD = 0.25; // Only show wind when > 25% of max (20+ km/h)
+        const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+        let prefersReducedMotion = reducedMotionQuery.matches;
+        const windCanvasState = { cssWidth: 0, cssHeight: 0, dpr: 2 };
 
         // Check if there's substantial wind to animate
         function hasSubstantialWind() {
@@ -2916,30 +3458,37 @@
             }
         }
 
-
-        // Draw animated wind streaks
-        function drawWindAnimation(timestamp) {
+        function ensureWindCanvasSize() {
             const canvas = document.getElementById('windCanvas');
             const wrapper = document.getElementById('weatherDisplayWrapper');
-            const ctx = canvas.getContext('2d');
-
-            // Get wrapper dimensions for relative positioning
             const wrapperRect = wrapper.getBoundingClientRect();
             const width = window.innerWidth;
             const height = wrapperRect.height || window.innerHeight * 0.6;
+            const dpr = windCanvasState.dpr;
 
-            // Set canvas to wrapper size with retina support
-            canvas.width = width * 2;
-            canvas.height = height * 2;
-            canvas.style.width = width + 'px';
-            canvas.style.height = height + 'px';
-            ctx.scale(2, 2);
+            if (windCanvasState.cssWidth !== width || windCanvasState.cssHeight !== height) {
+                windCanvasState.cssWidth = width;
+                windCanvasState.cssHeight = height;
+                canvas.width = Math.round(width * dpr);
+                canvas.height = Math.round(height * dpr);
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+            }
+
+            return { canvas, width, height, wrapperRect, dpr };
+        }
+
+        // Draw animated wind streaks
+        function drawWindAnimation(timestamp) {
+            const { canvas, width, height, wrapperRect, dpr } = ensureWindCanvasSize();
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             // Clear canvas
             ctx.clearRect(0, 0, width, height);
 
-            if (!hasSubstantialWind() || windStreaks.length === 0) {
-                windAnimationId = requestAnimationFrame(drawWindAnimation);
+            if (prefersReducedMotion || !hasSubstantialWind() || windStreaks.length === 0) {
+                windAnimationId = null;
                 return;
             }
 
@@ -2994,7 +3543,7 @@
                 // Fade based on distance from temperature curve
                 const distFromCurve = streak.baseY * 0.3;
                 const distanceFade = Math.max(0, 1 - distFromCurve / 30);
-                const alpha = streak.opacity * windIntensity * (0.7 + dayValue * 0.3) * 4.5 * distanceFade * shimmer;
+                const alpha = streak.opacity * windIntensity * (0.7 + dayValue * 0.3) * 6.5 * distanceFade * shimmer;
 
                 // Skip if too faint
                 if (alpha < 0.02) return;
@@ -3021,10 +3570,16 @@
 
         // Start wind animation
         function startWindAnimation() {
-            if (windAnimationId) {
-                cancelAnimationFrame(windAnimationId);
+            if (windAnimationId) cancelAnimationFrame(windAnimationId);
+            if (prefersReducedMotion) {
+                stopWindAnimation();
+                return;
             }
             initWindStreaks();
+            if (windStreaks.length === 0) {
+                stopWindAnimation();
+                return;
+            }
             windAnimationId = requestAnimationFrame(drawWindAnimation);
         }
 
@@ -3037,23 +3592,33 @@
             // Clear wind canvas
             const canvas = document.getElementById('windCanvas');
             const ctx = canvas.getContext('2d');
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
+
+        reducedMotionQuery.addEventListener('change', (e) => {
+            prefersReducedMotion = e.matches;
+            if (prefersReducedMotion) {
+                stopWindAnimation();
+            } else {
+                startWindAnimation();
+            }
+        });
 
         // ===== Year Temperature Band =====
 
         // Fetch year band data: 3 API calls merged into a 365/366 entry array
-        async function fetchYearBandData(cityKey) {
-            if (yearBandCache[cityKey]) return yearBandCache[cityKey];
+        async function fetchYearBandData(cityKey, options = {}) {
+            const { signal } = options;
+            const cached = getBoundedCacheEntry(yearBandCache, yearBandCacheOrder, cityKey);
+            if (cached) return cached;
 
             const city = cities[cityKey];
             if (!city) return null;
 
-            const now = new Date();
-            const tz = city.timezone && city.timezone !== 'auto' ? city.timezone : 'UTC';
-            const cityDateStr = now.toLocaleDateString('en-CA', { timeZone: tz });
-            const cityToday = new Date(cityDateStr + 'T00:00:00');
-            const year = cityToday.getFullYear();
+            const tz = getCityTimeZone(city);
+            const cityDateStr = formatDateInTimeZone(new Date(), tz);
+            const year = parseDateString(cityDateStr).year;
             const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
             const daysInYear = isLeapYear ? 366 : 365;
 
@@ -3061,22 +3626,16 @@
             const dec31 = `${year}-12-31`;
 
             // Yesterday's date
-            const yesterday = new Date(cityToday);
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split('T')[0];
+            const yesterdayStr = shiftDateString(cityDateStr, -1);
 
             // Today string
             const todayStr = cityDateStr;
 
             // Forecast end (today + 14)
-            const forecastEnd = new Date(cityToday);
-            forecastEnd.setDate(forecastEnd.getDate() + 14);
-            const forecastEndStr = forecastEnd.toISOString().split('T')[0];
+            const forecastEndStr = shiftDateString(cityDateStr, 14);
 
             // Fill start = day after forecast end
-            const fillStart = new Date(forecastEnd);
-            fillStart.setDate(fillStart.getDate() + 1);
-            const fillStartStr = fillStart.toISOString().split('T')[0];
+            const fillStartStr = shiftDateString(forecastEndStr, 1);
 
             // Last year equivalent dates for fill
             const lastYear = year - 1;
@@ -3089,32 +3648,36 @@
             try {
                 // Build the 3 API calls
                 const calls = [];
+                const makeCall = async (type, url) => {
+                    try {
+                        const data = await fetchJsonWithRetry(url, {
+                            retries: 1,
+                            timeoutMs: 20000,
+                            signal
+                        });
+                        return { type, data };
+                    } catch (error) {
+                        if (isAbortError(error)) throw error;
+                        return { type, data: null };
+                    }
+                };
 
                 // 1. Archive: Jan 1 this year → yesterday (past real data)
                 if (yesterdayStr >= jan1) {
                     calls.push(
-                        fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m&timezone=${encodeURIComponent(tz)}&start_date=${jan1}&end_date=${yesterdayStr}`)
-                            .then(r => r.json())
-                            .then(data => ({ type: 'past', data }))
-                            .catch(() => ({ type: 'past', data: null }))
+                        makeCall('past', `https://archive-api.open-meteo.com/v1/archive?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m&timezone=${encodeURIComponent(tz)}&start_date=${jan1}&end_date=${yesterdayStr}`)
                     );
                 }
 
                 // 2. Forecast: today → today + 14 days
                 calls.push(
-                    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m&timezone=${encodeURIComponent(tz)}&start_date=${todayStr}&end_date=${forecastEndStr}`)
-                        .then(r => r.json())
-                        .then(data => ({ type: 'forecast', data }))
-                        .catch(() => ({ type: 'forecast', data: null }))
+                    makeCall('forecast', `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m&timezone=${encodeURIComponent(tz)}&start_date=${todayStr}&end_date=${forecastEndStr}`)
                 );
 
                 // 3. Archive last year: fill remaining days
                 if (fillStartStr <= dec31) {
                     calls.push(
-                        fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m&timezone=${encodeURIComponent(tz)}&start_date=${fillStartLastYear}&end_date=${dec31LastYear}`)
-                            .then(r => r.json())
-                            .then(data => ({ type: 'fill', data }))
-                            .catch(() => ({ type: 'fill', data: null }))
+                        makeCall('fill', `https://archive-api.open-meteo.com/v1/archive?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m&timezone=${encodeURIComponent(tz)}&start_date=${fillStartLastYear}&end_date=${dec31LastYear}`)
                     );
                 }
 
@@ -3122,9 +3685,7 @@
 
                 // Helper: day index from date string (0 = Jan 1)
                 function dayIndex(dateStr) {
-                    const d = new Date(dateStr + 'T00:00:00');
-                    const j1 = new Date(`${year}-01-01T00:00:00`);
-                    return Math.round((d - j1) / 86400000);
+                    return diffDateStrings(dateStr, jan1);
                 }
 
                 // Astronomical daylight fraction from latitude + day of year
@@ -3183,16 +3744,15 @@
                 // Fill any gaps with null
                 for (let i = 0; i < daysInYear; i++) {
                     if (!result[i]) {
-                        const d = new Date(`${year}-01-01T00:00:00`);
-                        d.setDate(d.getDate() + i);
-                        result[i] = { date: d.toISOString().split('T')[0], tempC: null, tier: 0, daylightFrac: astroDay(i) };
+                        result[i] = { date: shiftDateString(jan1, i), tempC: null, tier: 0, daylightFrac: astroDay(i) };
                     }
                 }
 
-                yearBandCache[cityKey] = result;
+                setBoundedCacheEntry(yearBandCache, yearBandCacheOrder, cityKey, result, MAX_YEAR_BAND_CACHE_ENTRIES);
                 return result;
 
             } catch (err) {
+                if (isAbortError(err)) throw err;
                 console.error('Year band fetch failed:', err);
                 return null;
             }
@@ -3204,7 +3764,7 @@
             const canvas = document.getElementById('yearBandCanvas');
             if (!canvas || !container) return;
 
-            const data = yearBandCache[currentCity];
+            const data = getBoundedCacheEntry(yearBandCache, yearBandCacheOrder, currentCity);
             if (!data) {
                 container.classList.remove('visible');
                 return;
@@ -3224,24 +3784,29 @@
 
             // Retina support
             const dpr = window.devicePixelRatio || 1;
-            canvas.width = w * dpr;
-            canvas.height = totalH * dpr;
-            canvas.style.width = w + 'px';
-            canvas.style.height = totalH + 'px';
+            const newW = w * dpr;
+            const newH = totalH * dpr;
+            if (canvas.width !== newW || canvas.height !== newH) {
+                canvas.width = newW;
+                canvas.height = newH;
+                canvas.style.width = w + 'px';
+                canvas.style.height = totalH + 'px';
+            }
 
             const ctx = canvas.getContext('2d');
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, newW, newH);
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             const daysInYear = data.length;
 
             // Compute today index (needed for triangle + markers)
             const city = cities[currentCity];
-            const tz = city && city.timezone && city.timezone !== 'auto' ? city.timezone : 'UTC';
-            const now = new Date();
-            const cityDateStr = now.toLocaleDateString('en-CA', { timeZone: tz });
-            const cityToday = new Date(cityDateStr + 'T00:00:00');
-            const jan1 = new Date(`${cityToday.getFullYear()}-01-01T00:00:00`);
-            const todayIndex = Math.round((cityToday - jan1) / 86400000);
+            const tz = getCityTimeZone(city);
+            const cityDateStr = formatDateInTimeZone(new Date(), tz);
+            const year = parseDateString(cityDateStr).year;
+            const jan1 = `${year}-01-01`;
+            const todayIndex = diffDateStrings(cityDateStr, jan1);
 
             // Clip to pill shape for the band area
             ctx.save();
@@ -3328,7 +3893,7 @@
             if (!canvas || !container || !tooltip) return;
 
             canvas.addEventListener('click', async (e) => {
-                const data = yearBandCache[currentCity];
+                const data = getBoundedCacheEntry(yearBandCache, yearBandCacheOrder, currentCity);
                 if (!data) return;
 
                 const rect = canvas.getBoundingClientRect();
@@ -3341,18 +3906,16 @@
 
                 // Compute offset from today
                 const city = cities[currentCity];
-                const tz = city && city.timezone && city.timezone !== 'auto' ? city.timezone : 'UTC';
-                const now = new Date();
-                const cityDateStr = now.toLocaleDateString('en-CA', { timeZone: tz });
-                const cityToday = new Date(cityDateStr + 'T00:00:00');
-                const jan1 = new Date(`${cityToday.getFullYear()}-01-01T00:00:00`);
-                const todayIndex = Math.round((cityToday - jan1) / 86400000);
+                const tz = getCityTimeZone(city);
+                const cityDateStr = formatDateInTimeZone(new Date(), tz);
+                const year = parseDateString(cityDateStr).year;
+                const jan1 = `${year}-01-01`;
+                const todayIndex = diffDateStrings(cityDateStr, jan1);
                 let offset = dayIdx - todayIndex;
 
                 // Tier 3 (last year fill): navigate to the equivalent date last year
                 if (entry.tier === 3) {
-                    const lastYearDate = new Date(entry.date + 'T00:00:00');
-                    offset = Math.round((lastYearDate - cityToday) / 86400000);
+                    offset = diffDateStrings(entry.date, cityDateStr);
                 }
 
                 // Block clicks beyond forecast range for tier 2 future days
@@ -3370,7 +3933,7 @@
             // Hover tooltip (desktop only)
             if (!('ontouchstart' in window) && navigator.maxTouchPoints <= 0) {
                 canvas.addEventListener('mousemove', (e) => {
-                    const data = yearBandCache[currentCity];
+                    const data = getBoundedCacheEntry(yearBandCache, yearBandCacheOrder, currentCity);
                     if (!data) return;
 
                     const rect = canvas.getBoundingClientRect();
@@ -3387,12 +3950,10 @@
                     const color = getTempColor(normTemp);
 
                     // Format date as "Mon Day" (e.g., "Feb 24")
-                    const year = new Date().getFullYear();
-                    const jan1 = new Date(`${year}-01-01T00:00:00`);
-                    const date = new Date(jan1);
-                    date.setDate(date.getDate() + dayIdx);
-                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    const dateStr = `${monthNames[date.getMonth()]} ${date.getDate()}`;
+                    const city = cities[currentCity];
+                    const cityYear = parseDateString(formatDateInTimeZone(new Date(), getCityTimeZone(city))).year;
+                    const date = dateStringToUTCNoon(shiftDateString(`${cityYear}-01-01`, dayIdx));
+                    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 
                     // Daylight duration from daylightFrac (fraction of 24h), rounded to 5 min
                     // const daylightTotalMin = Math.round((entry.daylightFrac * 24 * 60) / 5) * 5;
@@ -3401,7 +3962,7 @@
                     // const daylightStr = `${dlH}h${String(dlM).padStart(2, '0')}`;
 
                     const tierLabel = entry.tier === 3 ? ' <span style="color:rgba(200,210,230,0.5)">(last year)</span>' : '';
-                    tooltip.innerHTML = `${dateStr} · <span style="color:rgb(${color.r},${color.g},${color.b})">${Math.round(entry.tempC)}°C</span>${tierLabel}`;
+                    tooltip.innerHTML = `${dateStr} · <span style="color:rgb(${color.r},${color.g},${color.b})">${displayTemp(entry.tempC)}${tempUnit()}</span>${tierLabel}`;
                     tooltip.style.left = `${e.clientX}px`;
                     tooltip.style.top = `${rect.top}px`;
                     tooltip.style.display = 'block';
@@ -3451,13 +4012,14 @@
 
         function initYearBandHover() {
             if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
-            document.addEventListener('mousemove', (e) => {
+            addRafMousemoveListener(document, (e) => {
                 const container = document.getElementById('yearBandContainer');
                 if (!container) return;
                 const rect = container.getBoundingClientRect();
                 // Show when hovering over the band area (with 20px above for easier targeting) or when map is active
                 const hoverZoneTop = rect.top - 20;
-                if (((e.clientY >= hoverZoneTop && e.clientY <= rect.bottom) || isWorldMapActive()) && yearBandCache[currentCity]) {
+                if (((e.clientY >= hoverZoneTop && e.clientY <= rect.bottom) || isWorldMapActive()) &&
+                    getBoundedCacheEntry(yearBandCache, yearBandCacheOrder, currentCity)) {
                     showYearBand();
                 } else if (container.classList.contains('visible') || container.style.pointerEvents === 'auto') {
                     if (!yearBandFadeTimeout && !yearBandCleanupTimeout) {
@@ -3571,11 +4133,19 @@
             }, 3000);
         });
 
+        let drawScheduled = false;
         function draw() {
+            // Batch multiple draw() calls into a single paint frame
+            if (drawScheduled) return;
+            drawScheduled = true;
+            requestAnimationFrame(() => {
+                drawScheduled = false;
+                drawImmediate();
+            });
+        }
+        function drawImmediate() {
             // Draw sky ribbon first so its dimensions are available for temperature curve positioning
             drawSkyRibbon();
-            // Force layout reflow so getBoundingClientRect returns updated dimensions
-            document.getElementById('skyRibbon').getBoundingClientRect();
             drawTemperatureCurve();
             drawYearBand();
             startWindAnimation();
@@ -3598,8 +4168,7 @@
             if (query.length < 2) return [];
             const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=en&format=json`;
             try {
-                const response = await fetch(url);
-                const data = await response.json();
+                const data = await fetchJsonWithRetry(url, { retries: 1, timeoutMs: 10000 });
                 if (data.results && data.results.length > 0) {
                     return data.results.map(result => ({
                         name: result.name,
@@ -3691,12 +4260,12 @@
 
                 // Create a new city entry
                 const cityKey = suggestion.name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
-                cities[cityKey] = {
+                addOrUpdateCity(cityKey, {
                     name: suggestion.name,
                     lat: suggestion.lat,
                     lon: suggestion.lon,
                     timezone: suggestion.timezone
-                };
+                });
                 currentCity = cityKey;
                 currentDayOffset = 0; // Reset to today's view when changing location
 
@@ -3715,9 +4284,11 @@
                 isEditingCity = false;
                 if (debounceTimer) clearTimeout(debounceTimer);
 
-                const newLabel = document.createElement('span');
+                const newLabel = document.createElement('button');
+                newLabel.type = 'button';
                 newLabel.className = 'city-label';
                 newLabel.id = 'cityLabel';
+                newLabel.setAttribute('aria-label', 'Choose city');
                 newLabel.textContent = name;
                 wrapper.replaceWith(newLabel);
                 newLabel.addEventListener('click', startCityEdit);
@@ -3795,20 +4366,33 @@
             if (existing) existing.remove();
 
             const cityLabel = document.getElementById('cityLabel');
-            const setDefaultBtn = document.createElement('span');
+            if (!cityLabel || !cityLabel.parentElement) return;
+            const cityLabelWrapper = cityLabel.parentElement;
+            const setDefaultBtn = document.createElement('button');
+            setDefaultBtn.type = 'button';
             setDefaultBtn.className = 'set-default-btn';
+            setDefaultBtn.setAttribute('aria-label', 'Set current city as default');
             setDefaultBtn.textContent = 'set as default';
             setDefaultBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 saveDefaultCity(currentCity);
                 setDefaultBtn.textContent = 'saved!';
-                setTimeout(() => setDefaultBtn.remove(), 1500);
+                setTimeout(() => { setDefaultBtn.remove(); restoreRandom(); }, 1500);
             });
-            cityLabel.appendChild(setDefaultBtn);
+            cityLabelWrapper.appendChild(setDefaultBtn);
+
+            // Hide random button while set-default is visible
+            const randomBtn = document.getElementById('randomBtn');
+            randomBtn.classList.remove('shown');
+            randomBtn.style.pointerEvents = 'none';
+            function restoreRandom() {
+                randomBtn.style.pointerEvents = '';
+            }
 
             // Auto-hide after 8 seconds if not clicked
             setTimeout(() => {
                 if (setDefaultBtn.parentNode) setDefaultBtn.remove();
+                restoreRandom();
             }, 8000);
         }
 
@@ -3858,6 +4442,40 @@
             }
         });
 
+        // Show/hide random & week buttons with linger timer
+        (function() {
+            const LINGER_MS = 3000;
+            function setupBtnHover(triggerEl, btnEl) {
+                let timer = null;
+                function show() {
+                    if (timer) { clearTimeout(timer); timer = null; }
+                    btnEl.classList.add('shown');
+                }
+                function scheduleHide() {
+                    if (timer) clearTimeout(timer);
+                    timer = setTimeout(() => { btnEl.classList.remove('shown'); timer = null; }, LINGER_MS);
+                }
+                triggerEl.addEventListener('mouseenter', show);
+                triggerEl.addEventListener('mouseleave', scheduleHide);
+                btnEl.addEventListener('mouseenter', show);
+                btnEl.addEventListener('mouseleave', scheduleHide);
+            }
+            setupBtnHover(document.querySelector('.city-label-wrapper'), document.getElementById('randomBtn'));
+            setupBtnHover(document.querySelector('.day-label-wrapper'), document.getElementById('weekBtn'));
+            setupBtnHover(document.getElementById('unitBtn'), document.getElementById('unitBtn'));
+        })();
+
+        // Handle unit toggle button
+        document.getElementById('unitBtn').textContent = useFahrenheit ? '°F' : '°C';
+        document.getElementById('unitBtn').addEventListener('click', () => {
+            useFahrenheit = !useFahrenheit;
+            localStorage.setItem('useFahrenheit', useFahrenheit);
+            document.getElementById('unitBtn').textContent = useFahrenheit ? '°F' : '°C';
+            // Redraw only temp-sensitive elements (not time marker)
+            drawTemperatureCurve();
+            drawYearBand();
+        });
+
         // Handle random capital button
         document.getElementById('randomBtn').addEventListener('click', async () => {
             currentExtraDots = null; // Clear similar-city dots
@@ -3869,12 +4487,12 @@
 
             // Create a new city entry
             const cityKey = randomCapital.name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
-            cities[cityKey] = {
+            addOrUpdateCity(cityKey, {
                 name: randomCapital.name,
                 lat: randomCapital.lat,
                 lon: randomCapital.lon,
                 timezone: randomCapital.timezone
-            };
+            });
             currentCity = cityKey;
             currentDayOffset = 0; // Reset to today's view
 
@@ -4038,8 +4656,8 @@
 
                 // Day label
                 const dateStr = getDateForOffset(city, offset);
-                const date = new Date(dateStr + 'T12:00:00');
-                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                const date = dateStringToUTCNoon(dateStr);
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
                 ctx.fillStyle = 'rgba(160, 170, 190, 0.5)';
                 ctx.font = '11px system-ui, -apple-system, sans-serif';
                 ctx.textAlign = 'left';
@@ -4499,6 +5117,11 @@
 
         // Handle keyboard navigation for days
         document.addEventListener('keydown', async (e) => {
+            const activeEl = document.activeElement;
+            const isTypingContext = activeEl &&
+                (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+            if (isTypingContext) return;
+
             if (e.key === 'ArrowLeft') {
                 currentDayOffset--;
                 await refreshView();
@@ -4565,6 +5188,10 @@
         updateOverlayPosition();
         window.addEventListener('resize', updateOverlayPosition);
 
+        // Track mouse movement direction for ref bar vs curve tooltip
+        let prevMouseX = null, prevMouseY = null;
+        let moveDirSmooth = 0; // -1 = horizontal, +1 = vertical, smoothed
+
         tempOverlay.addEventListener('mousemove', (e) => {
             // Get sky ribbon bounds in screen coordinates (for mouse position comparison)
             const skyRibbonEl = document.getElementById('skyRibbon');
@@ -4578,6 +5205,18 @@
 
             const mouseX = e.clientX;
             const mouseY = e.clientY;
+
+            // Update movement direction (smoothed)
+            if (prevMouseX !== null) {
+                const dx = Math.abs(mouseX - prevMouseX);
+                const dy = Math.abs(mouseY - prevMouseY);
+                if (dx + dy > 1) { // ignore sub-pixel jitter
+                    const dir = (dy > dx) ? 1 : -1; // +1 vertical, -1 horizontal
+                    moveDirSmooth = moveDirSmooth * 0.7 + dir * 0.3; // exponential smoothing
+                }
+            }
+            prevMouseX = mouseX;
+            prevMouseY = mouseY;
 
             // Hide tooltip if mouse is at or below the day selector
             if (mouseY >= daySelectorRect.top - 10) {
@@ -4594,40 +5233,34 @@
             const refLineTopScreen = wrapperRect.top + curveBottom - (1.0 * curveHeight * 0.8);
             const refLineBottomScreen = wrapperRect.top + curveBottom;
 
-            // Check if mouse is near the reference bar (within 20px horizontally)
-            const nearRefBar = Math.abs(mouseX - refLineXScreen) < 20
+            // Check if mouse is near the reference bar (within 14px horizontally)
+            const nearRefBar = Math.abs(mouseX - refLineXScreen) < 14
                 && mouseY >= refLineTopScreen - 10
                 && mouseY <= refLineBottomScreen + 10;
 
-            if (nearRefBar) {
-                // Check if mouse is near the actual temperature curve at this X
-                const tCurve = (mouseX - ribbonLeft) / ribbonWidth;
-                const curveTempAtX = interpolateDataSmooth(weatherData.temperature, tCurve, true);
-                const curveYAtX = wrapperRect.top + curveBottom - (mapTempToDisplayRange(curveTempAtX) * curveHeight * 0.8);
-                const nearCurve = Math.abs(mouseY - curveYAtX) < 15;
+            // Reset direction memory when not near the bar
+            if (!nearRefBar) moveDirSmooth = Math.min(moveDirSmooth, 0);
 
-                if (!nearCurve) {
-                    // Show ref bar tooltip: just the temperature at pointer height
-                    const yFrac = Math.max(0, Math.min(1, (mouseY - refLineTopScreen) / (refLineBottomScreen - refLineTopScreen)));
-                    const tempNorm = tempDisplayMax - yFrac * (tempDisplayMax - tempDisplayMin);
-                    const tempCelsius = tempNorm * 60 - 25;
-                    const tempColor = getTempColor(tempNorm);
-                    const colorStr = `rgb(${Math.round(tempColor.r)}, ${Math.round(tempColor.g)}, ${Math.round(tempColor.b)})`;
+            if (nearRefBar && moveDirSmooth > 0) {
+                // Primarily vertical movement on ref bar → show bar temperature
+                const yFrac = Math.max(0, Math.min(1, (mouseY - refLineTopScreen) / (refLineBottomScreen - refLineTopScreen)));
+                const tempNorm = tempDisplayMax - yFrac * (tempDisplayMax - tempDisplayMin);
+                const tempCelsius = tempNorm * 60 - 25;
+                const tempColor = getTempColor(tempNorm);
+                const colorStr = `rgb(${Math.round(tempColor.r)}, ${Math.round(tempColor.g)}, ${Math.round(tempColor.b)})`;
 
-                    tempTooltip.style.background = 'none';
-                    tempTooltip.style.border = 'none';
-                    tempTooltip.style.boxShadow = 'none';
-                    tempTooltip.style.backdropFilter = 'none';
-                    tempTooltip.style.padding = '0';
-                    tempTooltip.style.transform = 'translateY(-50%)';
-                    tempTooltip.style.marginTop = '0';
-                    tempTooltip.innerHTML = `<span style="color: ${colorStr}; font-size: 0.8rem;">${Math.round(tempCelsius)}°C</span>`;
-                    tempTooltip.style.left = `${mouseX + 14}px`;
-                    tempTooltip.style.top = `${mouseY}px`;
-                    tempTooltip.style.display = 'block';
-                    return;
-                }
-                // If near the curve, fall through to normal curve tooltip
+                tempTooltip.style.background = 'none';
+                tempTooltip.style.border = 'none';
+                tempTooltip.style.boxShadow = 'none';
+                tempTooltip.style.backdropFilter = 'none';
+                tempTooltip.style.padding = '0';
+                tempTooltip.style.transform = 'translateY(-50%)';
+                tempTooltip.style.marginTop = '0';
+                tempTooltip.innerHTML = `<span style="color: ${colorStr}; font-size: 0.8rem;">${displayTemp(tempCelsius)}${tempUnit()}</span>`;
+                tempTooltip.style.left = `${mouseX + 14}px`;
+                tempTooltip.style.top = `${mouseY}px`;
+                tempTooltip.style.display = 'block';
+                return;
             }
 
             // Calculate position along the ribbon (0 to 1)
@@ -4652,8 +5285,8 @@
             const windSpeedKmh = weatherData.windSpeedRaw ? interpolateData(weatherData.windSpeedRaw, t) : 0;
 
             // Build tooltip content
-            let tempInfo = `<span style="color: rgb(${tempColor.r}, ${tempColor.g}, ${tempColor.b})">${Math.round(tempCelsius)}°C</span>`;
-            if (windSpeedKmh > 15) {
+            let tempInfo = `<span style="color: rgb(${tempColor.r}, ${tempColor.g}, ${tempColor.b})">${displayTemp(tempCelsius)}${tempUnit()}</span>`;
+            if (windSpeedKmh >= 20) {
                 tempInfo += ` | ${Math.round(windSpeedKmh)} km/h wind`;
             }
 
@@ -4673,6 +5306,9 @@
 
         tempOverlay.addEventListener('mouseleave', () => {
             tempTooltip.style.display = 'none';
+            prevMouseX = null;
+            prevMouseY = null;
+            moveDirSmooth = 0;
         });
 
         // Touch device detection
@@ -4712,7 +5348,7 @@
 
                 // Get cloud cover value and daylight for color calculation
                 const cloudValue = interpolateData(weatherData.clouds, t);
-                const cloudPercent = Math.round(cloudValue * 100);
+                const cloudPercent = Math.round(cloudValue * 10) * 10;
                 const dayValue = interpolateData(weatherData.daylight, t);
 
                 // Get precipitation data
@@ -4751,19 +5387,27 @@
                 const sunsetHour = weatherData.sunsetHour;
 
                 if (Math.abs(currentHour - sunriseHour) <= 1) {
-                    // Get sky color at sunrise time
-                    const sunriseDayValue = interpolateData(weatherData.daylight, (sunriseHour - displayStartHour) / (displayEndHour - displayStartHour));
-                    const skyColor = getSkyColor(sunriseDayValue, 0);
+                    // Sample actual pixel color from sky ribbon at sunrise position
+                    const sunriseT = (sunriseHour - displayStartHour) / (displayEndHour - displayStartHour);
+                    const ribbonCanvas = document.getElementById('skyRibbon');
+                    const ribbonCtx = ribbonCanvas.getContext('2d');
+                    const sampleX = Math.floor(sunriseT * ribbonCanvas.width);
+                    const sampleY = Math.floor(ribbonCanvas.height * 0.15);
+                    const pixel = ribbonCtx.getImageData(sampleX, sampleY, 1, 1).data;
                     const sunriseMinutes = Math.round((sunriseHour % 1) * 60);
                     const sunriseTimeStr = `${Math.floor(sunriseHour)}h${sunriseMinutes.toString().padStart(2, '0')}`;
-                    weatherInfo += ` | <span style="color: rgb(${skyColor.bottom.r}, ${skyColor.bottom.g}, ${skyColor.bottom.b})">sunrise ${sunriseTimeStr}</span>`;
+                    weatherInfo += ` | <span style="color: rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})">sunrise ${sunriseTimeStr}</span>`;
                 } else if (Math.abs(currentHour - sunsetHour) <= 1) {
-                    // Get sky color at sunset time
-                    const sunsetDayValue = interpolateData(weatherData.daylight, (sunsetHour - displayStartHour) / (displayEndHour - displayStartHour));
-                    const skyColor = getSkyColor(sunsetDayValue, 0);
+                    // Sample actual pixel color from sky ribbon at sunset position
+                    const sunsetT = (sunsetHour - displayStartHour) / (displayEndHour - displayStartHour);
+                    const ribbonCanvas = document.getElementById('skyRibbon');
+                    const ribbonCtx = ribbonCanvas.getContext('2d');
+                    const sampleX = Math.floor(sunsetT * ribbonCanvas.width);
+                    const sampleY = Math.floor(ribbonCanvas.height * 0.15);
+                    const pixel = ribbonCtx.getImageData(sampleX, sampleY, 1, 1).data;
                     const sunsetMinutes = Math.round((sunsetHour % 1) * 60);
                     const sunsetTimeStr = `${Math.floor(sunsetHour)}h${sunsetMinutes.toString().padStart(2, '0')}`;
-                    weatherInfo += ` | <span style="color: rgb(${skyColor.bottom.r}, ${skyColor.bottom.g}, ${skyColor.bottom.b})">sunset ${sunsetTimeStr}</span>`;
+                    weatherInfo += ` | <span style="color: rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})">sunset ${sunsetTimeStr}</span>`;
                 }
 
                 // Display the tooltip with hour on first line, weather info on second
@@ -4786,29 +5430,26 @@
                 const ribbon = document.getElementById('skyRibbon');
                 if (!ribbon) return;
                 const ribbonRect = ribbon.getBoundingClientRect();
+                const aboveRibbon = e.clientY < ribbonRect.top &&
+                                    e.clientX >= ribbonRect.left &&
+                                    e.clientX <= ribbonRect.right;
 
-                // Above the sky ribbon = from viewport top to ribbon top
-                const ribbonCenterX = (ribbonRect.left + ribbonRect.right) / 2;
-                const halfZone = ribbonRect.width / 4;
-                const isAboveRibbon = e.clientY < ribbonRect.top &&
-                                      e.clientX >= ribbonCenterX - halfZone &&
-                                      e.clientX <= ribbonCenterX + halfZone;
-
-                if (isAboveRibbon) {
-                    // Show title
+                if (aboveRibbon) {
                     if (hoverTitleFadeTimer) {
                         clearTimeout(hoverTitleFadeTimer);
                         hoverTitleFadeTimer = null;
                     }
-                    hoverTitle.classList.add('visible');
-                } else if (hoverTitle.classList.contains('visible')) {
-                    // Schedule fade out after delay
-                    if (!hoverTitleFadeTimer) {
-                        hoverTitleFadeTimer = setTimeout(() => {
-                            hoverTitle.classList.remove('visible');
-                            hoverTitleFadeTimer = null;
-                        }, 2000);
+                    if (!hoverTitle.classList.contains('visible')) {
+                        const sub = document.getElementById('hoverSub');
+                        if (sub) setSubtitleText(sub, randomSubtitle());
                     }
+                    hoverTitle.classList.add('visible');
+                } else {
+                    if (hoverTitleFadeTimer) {
+                        clearTimeout(hoverTitleFadeTimer);
+                        hoverTitleFadeTimer = null;
+                    }
+                    hoverTitle.classList.remove('visible');
                 }
             });
         }
@@ -4881,6 +5522,104 @@
         initYearBandInteraction();
         initYearBandHover();
 
+        // Subtitle list — embedded for reliability, can be overridden by subtitles.txt
+        const subtitleList = [
+            'forecast without numbers', 'a visual forecast', 'no numbers were harmed',
+            'because your ex-weather app was ugly', 'humidity is not a personality',
+            'no one reads the dewpoint', 'forecast, hold the spreadsheet',
+            'weather without the maths', 'the sky, uninterrupted',
+            'a day before it happens', 'sunrise to starlight',
+            'zero percent chance of icons', 'finally, weather with taste',
+            'the anti-dashboard', 'less data, more sky', 'uninterrupted by numbers',
+            'many weather apps feel overwhelmed', 'chance of charts: zero',
+            'no radar, no regrets', 'many weather app needs therapy',
+            "the sun doesn't need a percentage", 'all sky, no sidebar',
+            'weather for you, not for airplane pilots',
+            'no one ever needed two decimal places',
+            'twelve widgets was never the answer', 'wind chill is not a vibe',
+            "your forecast doesn't need a legend", 'pollen count can wait',
+            'weather, minus the anxiety', 'the barometer called, nobody answered',
+            'seven-day forecast, zero digits', 'your ex-weather app peaked in 2005',
+            'sponsored by: nobody', 'no push notifications',
+            'the premium version is also free', 'no ads between you and the sky',
+            'barometric pressure? seriously?'
+        ];
+
+        function randomSubtitle() {
+            return subtitleList[Math.floor(Math.random() * subtitleList.length)];
+        }
+
+        function setSubtitleText(container, text) {
+            if (!container) return;
+            const span = document.createElement('span');
+            span.textContent = text;
+            container.replaceChildren(span);
+        }
+
+        // Also try loading from subtitles.txt (overrides embedded list if successful)
+        fetchTextWithRetry('subtitles.txt', { retries: 0, timeoutMs: 5000 }).then(text => {
+            const lines = text.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+            if (lines.length > 1) {
+                subtitleList.length = 0;
+                lines.forEach(l => subtitleList.push(l));
+            }
+        }).catch(() => {});
+
+        (function initSubtitles() {
+            const splashSub = document.getElementById('splashSub');
+            const hoverSub = document.getElementById('hoverSub');
+            const initSub = randomSubtitle();
+            setSubtitleText(splashSub, initSub);
+            setSubtitleText(hoverSub, initSub);
+
+            let lastSub = initSub;
+            let cycleTimer = null;
+
+            function animateSub(container, newText) {
+                const oldSpan = container.querySelector('span');
+                if (oldSpan) oldSpan.classList.add('slide-out');
+                setTimeout(() => {
+                    const newSpan = document.createElement('span');
+                    newSpan.textContent = newText;
+                    newSpan.classList.add('slide-in-from-right');
+                    container.replaceChildren(newSpan);
+                    void newSpan.offsetWidth;
+                    newSpan.classList.remove('slide-in-from-right');
+                }, 400);
+            }
+
+            function cycle() {
+                let sub;
+                do { sub = randomSubtitle(); } while (sub === lastSub && subtitleList.length > 1);
+                lastSub = sub;
+
+                const splashVisible = splashSub.closest('.splash-title') && !splashSub.closest('.splash-title').classList.contains('hidden');
+                const hoverVisible = hoverSub.closest('.hover-title') && hoverSub.closest('.hover-title').classList.contains('visible');
+
+                if (splashVisible) animateSub(splashSub, sub);
+                if (hoverVisible) animateSub(hoverSub, sub);
+                if (!hoverVisible) {
+                    setSubtitleText(hoverSub, sub);
+                }
+            }
+
+            function startCycling() {
+                if (cycleTimer) return;
+                cycle();
+                cycleTimer = setInterval(cycle, 10000);
+            }
+
+            // Auto-start after splash fades
+            setTimeout(startCycling, 5000);
+
+            // Expose cycle function globally for right-zone hover trigger
+            window._cycleSubtitle = function() {
+                if (cycleTimer) { clearInterval(cycleTimer); cycleTimer = null; }
+                cycle();
+                cycleTimer = setInterval(cycle, 10000);
+            };
+        })();
+
         // Fast initial load: show UI immediately, fetch only today, render, then background work
         updateCityLabel();
         updateDayLabel();
@@ -4895,8 +5634,8 @@
                 calculateTempRangeFromData(fullWeatherData);
                 tempRangeCity = currentCity;
 
-                // Render
-                draw();
+                // Render (synchronous for initial layout)
+                drawImmediate();
 
                 // Show day selector now that layout is stable
                 document.querySelector('.day-selector').classList.add('visible');
