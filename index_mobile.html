@@ -980,7 +980,8 @@
             grid-template-columns: 52px minmax(0, 1fr) 52px;
             grid-template-areas:
                 "prev day next"
-                "city city city";
+                "city city city"
+                "utility utility utility";
             gap: 10px 12px;
             align-items: center;
         }
@@ -1009,10 +1010,11 @@
         body.touch-device .city-label-wrapper,
         body.touch-device .day-label-wrapper {
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 8px;
-            flex-wrap: wrap;
+            width: 100%;
         }
 
         body.touch-device #prevDay {
@@ -1057,22 +1059,28 @@
         body.touch-device .random-btn,
         body.touch-device .week-btn,
         body.touch-device .unit-btn {
-            opacity: 0;
-            pointer-events: none;
+            display: none;
         }
 
         body.touch-device .random-btn,
         body.touch-device .week-btn {
+            position: static;
+            left: auto;
+            top: auto;
+            transform: none;
+            margin-top: 0;
             font-size: 0.66rem;
             padding: 5px 9px;
             color: rgba(220, 228, 242, 0.86);
         }
 
         body.touch-device .unit-btn {
-            position: absolute;
-            top: calc(100% + 8px);
-            left: 50%;
-            transform: translateX(-50%);
+            grid-area: utility;
+            justify-self: center;
+            position: static;
+            left: auto;
+            top: auto;
+            transform: none;
             padding: 6px 12px;
             border-color: rgba(255, 255, 255, 0.08);
             background: rgba(255, 255, 255, 0.04);
@@ -1082,7 +1090,7 @@
         body.touch-device .random-btn.shown,
         body.touch-device .week-btn.shown,
         body.touch-device .unit-btn.shown {
-            opacity: 1;
+            display: inline-flex;
             pointer-events: auto;
         }
 
@@ -1130,13 +1138,19 @@
                 grid-template-columns: 48px minmax(0, 1fr) 48px;
                 grid-template-areas:
                     "prev day next"
-                    "city city city";
+                    "city city city"
+                    "utility utility utility";
             }
 
-            body.touch-device .day-label-wrapper,
             body.touch-device .city-label-wrapper,
             body.touch-device .location-section {
                 justify-content: flex-start;
+            }
+
+            body.touch-device .date-nav,
+            body.touch-device .day-label-wrapper {
+                justify-content: center;
+                align-items: center;
             }
 
             body.touch-device .year-band-container {
