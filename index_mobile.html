@@ -113,7 +113,48 @@
         }
 
         .touch-device #tempCurveOverlay {
-            pointer-events: none;
+            pointer-events: auto;
+        }
+
+        .touch-device #skyRibbon,
+        .touch-device #tempCurveOverlay {
+            touch-action: pan-y;
+        }
+
+        .mobile-inspector {
+            display: none;
+        }
+
+        .mobile-inspector-primary,
+        .mobile-inspector-secondary {
+            display: flex;
+            align-items: baseline;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .mobile-inspector-hour {
+            color: rgba(210, 220, 240, 0.88);
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .mobile-inspector-temp {
+            color: #fff;
+            font-size: 1.15rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .mobile-inspector-secondary {
+            margin-top: 5px;
+            color: rgba(195, 205, 225, 0.72);
+            font-size: 0.76rem;
+            letter-spacing: 0.02em;
+            text-align: center;
+            line-height: 1.35;
         }
 
 
@@ -705,15 +746,6 @@
             }
         }
 
-        /* Hide arrows on touch devices */
-        .touch-device .day-arrow {
-            display: none;
-        }
-
-        .touch-device .date-nav {
-            gap: 0;
-        }
-
         /* Swipe indicator for touch devices */
         .swipe-indicator {
             position: fixed;
@@ -941,6 +973,229 @@
             transition: none;
         }
 
+        /* Mobile-first layout for the dedicated phone version */
+        body.touch-device {
+            padding-left: max(10px, env(safe-area-inset-left));
+            padding-right: max(10px, env(safe-area-inset-right));
+            padding-top: max(10px, env(safe-area-inset-top));
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+
+        body.touch-device .weather-display-wrapper {
+            padding-bottom: 0;
+        }
+
+        body.touch-device .container {
+            padding-top: 0;
+        }
+
+        body.touch-device .ribbon-wrapper.dynamic-height {
+            min-height: clamp(96px, 28vh, 170px);
+            border-radius: 28px 28px 0 0;
+        }
+
+        body.touch-device .mobile-inspector {
+            display: block;
+            margin: 12px auto 0;
+            width: min(100%, 540px);
+            padding: 12px 14px;
+            border-radius: 18px;
+            background: rgba(8, 12, 20, 0.56);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+            backdrop-filter: blur(10px);
+        }
+
+        body.touch-device .mobile-inspector.active {
+            border-color: rgba(170, 195, 235, 0.22);
+            background: rgba(10, 15, 26, 0.68);
+        }
+
+        body.touch-device .day-selector {
+            position: relative;
+            bottom: auto;
+            left: auto;
+            right: auto;
+            margin-top: 12px;
+            opacity: 1;
+        }
+
+        body.touch-device .day-selector-content {
+            height: auto;
+            display: grid;
+            grid-template-columns: 52px minmax(0, 1fr) 52px;
+            grid-template-areas:
+                "day day day"
+                "prev city next"
+                "unit unit unit";
+            gap: 10px 12px;
+            align-items: center;
+        }
+
+        body.touch-device .date-nav,
+        body.touch-device .location-section,
+        body.touch-device .unit-btn,
+        body.touch-device .day-arrow {
+            position: static;
+            transform: none;
+        }
+
+        body.touch-device .date-nav {
+            grid-area: day;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        body.touch-device .location-section {
+            grid-area: city;
+            display: flex;
+            justify-content: center;
+        }
+
+        body.touch-device .city-label-wrapper,
+        body.touch-device .day-label-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        body.touch-device #prevDay {
+            grid-area: prev;
+            left: auto;
+            display: flex;
+        }
+
+        body.touch-device #nextDay {
+            grid-area: next;
+            left: auto;
+            display: flex;
+        }
+
+        body.touch-device .day-arrow {
+            width: 52px;
+            height: 34px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.08);
+            color: rgba(225, 232, 245, 0.9);
+        }
+
+        body.touch-device .city-label,
+        body.touch-device .day-label {
+            min-width: 0;
+            padding: 8px 10px;
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.06);
+        }
+
+        body.touch-device .city-label {
+            font-size: 0.92rem;
+        }
+
+        body.touch-device .day-label {
+            font-size: 0.86rem;
+            white-space: normal;
+            line-height: 1.25;
+        }
+
+        body.touch-device .random-btn,
+        body.touch-device .week-btn,
+        body.touch-device .unit-btn {
+            position: static;
+            left: auto;
+            top: auto;
+            transform: none;
+            margin-top: 0;
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        body.touch-device .random-btn,
+        body.touch-device .week-btn {
+            font-size: 0.66rem;
+            padding: 5px 9px;
+            color: rgba(220, 228, 242, 0.86);
+        }
+
+        body.touch-device .unit-btn {
+            grid-area: unit;
+            justify-self: center;
+            padding: 6px 12px;
+            border-color: rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(225, 232, 245, 0.86);
+        }
+
+        body.touch-device .forecast-limit-msg,
+        body.touch-device .set-default-btn {
+            position: static;
+            transform: none;
+            display: block;
+            text-align: center;
+            margin-top: 4px;
+            width: 100%;
+        }
+
+        body.touch-device .year-band-container {
+            margin-top: 16px;
+            height: 16px;
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        body.touch-device .swipe-indicator {
+            bottom: calc(env(safe-area-inset-bottom) + 12px);
+            font-size: 0.72rem;
+        }
+
+        @media (max-width: 480px) and (orientation: portrait) {
+            body.touch-device .mobile-inspector {
+                margin-top: 10px;
+                padding: 11px 12px;
+            }
+
+            body.touch-device .mobile-inspector-temp {
+                font-size: 1.06rem;
+            }
+        }
+
+        @media (max-width: 900px) and (orientation: landscape) {
+            body.touch-device {
+                padding-top: max(6px, env(safe-area-inset-top));
+            }
+
+            body.touch-device .ribbon-wrapper.dynamic-height {
+                min-height: clamp(82px, 22vh, 128px);
+            }
+
+            body.touch-device .mobile-inspector {
+                margin-top: 9px;
+                padding: 10px 12px;
+            }
+
+            body.touch-device .day-selector-content {
+                grid-template-columns: 48px minmax(0, 1fr) auto 48px;
+                grid-template-areas:
+                    "prev day unit next"
+                    "city city city city";
+            }
+
+            body.touch-device .day-label-wrapper,
+            body.touch-device .city-label-wrapper,
+            body.touch-device .location-section {
+                justify-content: flex-start;
+            }
+
+            body.touch-device .year-band-container {
+                margin-top: 10px;
+                height: 14px;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -966,6 +1221,13 @@
             </div>
         </div>
         <div class="sky-tooltip" id="skyTooltip"></div>
+        <div class="mobile-inspector" id="mobileInspector" aria-live="polite">
+            <div class="mobile-inspector-primary">
+                <span class="mobile-inspector-hour" id="mobileInspectorHour">touch the sky</span>
+                <span class="mobile-inspector-temp" id="mobileInspectorTemp">for values</span>
+            </div>
+            <div class="mobile-inspector-secondary" id="mobileInspectorSecondary">tap or drag to inspect, swipe to change day</div>
+        </div>
 
         <div class="day-selector">
             <div class="day-selector-content">
@@ -992,7 +1254,7 @@
         <canvas id="yearBandCanvas"></canvas>
         <div class="year-band-tooltip" id="yearBandTooltip"></div>
     </div>
-    <div class="swipe-indicator" id="swipeIndicator">tap left/right of sky to change day</div>
+    <div class="swipe-indicator" id="swipeIndicator">drag to inspect, swipe to change day</div>
     <canvas id="worldMapCanvas"></canvas>
 
     <script>
@@ -4150,6 +4412,8 @@
             drawYearBand();
             startWindAnimation();
             updateTimeMarker();
+            updateOverlayPosition();
+            updateMobileInspector();
         }
 
         // Handle resize with debounce
@@ -4412,17 +4676,18 @@
             }, 5000);
         }
 
-        // Handle day navigation
-        document.getElementById('prevDay').addEventListener('click', async () => {
-            currentDayOffset--;
-            await refreshView();
-            // Prefetch more past days if approaching the boundary
-            if (currentDayOffset <= prefetchedPastBoundary + 3) {
-                prefetchPastDays(currentCity, prefetchedPastBoundary);
-            }
-        });
+        async function changeDayBy(delta) {
+            if (delta === 0) return;
 
-        document.getElementById('nextDay').addEventListener('click', async () => {
+            if (delta < 0) {
+                currentDayOffset--;
+                await refreshView();
+                if (currentDayOffset <= prefetchedPastBoundary + 3) {
+                    prefetchPastDays(currentCity, prefetchedPastBoundary);
+                }
+                return;
+            }
+
             if (currentDayOffset < maxFutureOffset) {
                 currentDayOffset++;
                 await refreshView();
@@ -4432,6 +4697,15 @@
             } else {
                 showForecastLimitMessage();
             }
+        }
+
+        // Handle day navigation
+        document.getElementById('prevDay').addEventListener('click', async () => {
+            await changeDayBy(-1);
+        });
+
+        document.getElementById('nextDay').addEventListener('click', async () => {
+            await changeDayBy(1);
         });
 
         // Click on day label to go to today
@@ -4474,6 +4748,7 @@
             // Redraw only temp-sensitive elements (not time marker)
             drawTemperatureCurve();
             drawYearBand();
+            updateMobileInspector();
         });
 
         // Handle random capital button
@@ -5123,22 +5398,9 @@
             if (isTypingContext) return;
 
             if (e.key === 'ArrowLeft') {
-                currentDayOffset--;
-                await refreshView();
-                // Prefetch more past days if approaching the boundary
-                if (currentDayOffset <= prefetchedPastBoundary + 3) {
-                    prefetchPastDays(currentCity, prefetchedPastBoundary);
-                }
+                await changeDayBy(-1);
             } else if (e.key === 'ArrowRight') {
-                if (currentDayOffset < maxFutureOffset) {
-                    currentDayOffset++;
-                    await refreshView();
-                    if (currentDayOffset >= maxFutureOffset) {
-                        showForecastLimitMessage();
-                    }
-                } else {
-                    showForecastLimitMessage();
-                }
+                await changeDayBy(1);
             }
         });
 
@@ -5317,6 +5579,95 @@
         // Sky tooltip on mousemove (desktop only - disabled on touch to allow tap navigation)
         const skyRibbon = document.getElementById('skyRibbon');
         const skyTooltip = document.getElementById('skyTooltip');
+        const mobileInspector = document.getElementById('mobileInspector');
+        const mobileInspectorHour = document.getElementById('mobileInspectorHour');
+        const mobileInspectorTemp = document.getElementById('mobileInspectorTemp');
+        const mobileInspectorSecondary = document.getElementById('mobileInspectorSecondary');
+        let lastTouchInspectT = null;
+
+        function getRibbonTFromClientX(clientX) {
+            const rect = skyRibbon.getBoundingClientRect();
+            if (!rect.width) return null;
+            return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        }
+
+        function formatHourLabel(hourValue) {
+            const wholeHour = Math.floor(hourValue);
+            const minutes = Math.round((hourValue - wholeHour) * 60);
+            if (minutes >= 60) return `${wholeHour + 1}h`;
+            if (minutes <= 0) return `${wholeHour}h`;
+            return `${wholeHour}h${minutes.toString().padStart(2, '0')}`;
+        }
+
+        function getCurrentCityHour() {
+            const city = cities[currentCity];
+            if (!city) return 12;
+            const parts = new Intl.DateTimeFormat('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: city.timezone
+            }).formatToParts(new Date());
+            const hour = Number(parts.find(part => part.type === 'hour')?.value || 12);
+            const minute = Number(parts.find(part => part.type === 'minute')?.value || 0);
+            return hour + minute / 60;
+        }
+
+        function getDefaultMobileInspectT() {
+            const displayHours = displayEndHour - displayStartHour;
+            if (displayHours <= 0) return 0.5;
+            if (currentDayOffset === 0) {
+                return Math.max(0, Math.min(1, (getCurrentCityHour() - displayStartHour) / displayHours));
+            }
+            return 0.5;
+        }
+
+        function buildMobileInspectorData(t) {
+            if (!weatherData.temperature || !weatherData.temperature.length) return null;
+
+            const clampedT = Math.max(0, Math.min(1, t));
+            const displayHours = displayEndHour - displayStartHour;
+            const hourValue = displayStartHour + clampedT * displayHours;
+            const tempNorm = interpolateDataSmooth(weatherData.temperature, clampedT, true);
+            const tempCelsius = tempNorm * 60 - 25;
+            const tempColor = getTempColor(tempNorm);
+            const cloudPercent = Math.round(interpolateData(weatherData.clouds, clampedT) * 100);
+            const precipProb = Math.round(interpolateData(weatherData.precipProbability, clampedT));
+            const windSpeedKmh = weatherData.windSpeedRaw ? Math.round(interpolateData(weatherData.windSpeedRaw, clampedT)) : 0;
+            const rainMm = weatherData.precipMm ? interpolateData(weatherData.precipMm, clampedT) : 0;
+            const snowCm = weatherData.snowCm ? interpolateData(weatherData.snowCm, clampedT) : 0;
+
+            let precipText = `${precipProb}% precip`;
+            if (snowCm > 0.1) {
+                precipText = `${snowCm.toFixed(1)} cm snow`;
+            } else if (rainMm > 0.1) {
+                precipText = `${rainMm.toFixed(1)} mm rain`;
+            }
+
+            return {
+                t: clampedT,
+                hourLabel: formatHourLabel(hourValue),
+                tempLabel: `${displayTemp(tempCelsius)}${tempUnit()}`,
+                tempColor: `rgb(${Math.round(tempColor.r)}, ${Math.round(tempColor.g)}, ${Math.round(tempColor.b)})`,
+                detail: `${cloudPercent}% clouds • ${precipText} • ${windSpeedKmh} km/h wind`
+            };
+        }
+
+        function updateMobileInspector(t = lastTouchInspectT, options = {}) {
+            if (!isTouchDevice || !mobileInspector) return;
+
+            const { isGestureHint = false, detailOverride = null, useDefaultIfMissing = true } = options;
+            const nextT = t == null && useDefaultIfMissing ? getDefaultMobileInspectT() : t;
+            const info = buildMobileInspectorData(nextT);
+            if (!info) return;
+
+            lastTouchInspectT = info.t;
+            mobileInspectorHour.textContent = info.hourLabel;
+            mobileInspectorTemp.textContent = info.tempLabel;
+            mobileInspectorTemp.style.color = info.tempColor;
+            mobileInspectorSecondary.textContent = detailOverride || info.detail;
+            mobileInspector.classList.toggle('active', !isGestureHint);
+        }
 
         if (!isTouchDevice) {
             skyRibbon.addEventListener('mousemove', (e) => {
@@ -5459,52 +5810,86 @@
 
             // Show tap indicator briefly, then hide it
             const swipeIndicator = document.getElementById('swipeIndicator');
+            updateMobileInspector(null, {
+                detailOverride: 'tap or drag to inspect, swipe to change day',
+                isGestureHint: true
+            });
             setTimeout(() => {
                 swipeIndicator.classList.add('hidden');
             }, 3000);
 
-            // Tap left/right side of sky ribbon to navigate days
-            const skyRibbonTouch = document.getElementById('skyRibbon');
-            let touchStartX = 0, touchStartY = 0;
+            const bindTouchInspector = (target) => {
+                if (!target) return;
 
-            skyRibbonTouch.addEventListener('touchstart', (e) => {
-                touchStartX = e.changedTouches[0].screenX;
-                touchStartY = e.changedTouches[0].screenY;
-            }, { passive: true });
+                let touchStartX = 0;
+                let touchStartY = 0;
+                let trackingTouch = false;
+                let swipeReady = false;
 
-            skyRibbonTouch.addEventListener('touchend', async (e) => {
-                const touchEndX = e.changedTouches[0].screenX;
-                const touchEndY = e.changedTouches[0].screenY;
-                const deltaX = Math.abs(touchEndX - touchStartX);
-                const deltaY = Math.abs(touchEndY - touchStartY);
+                target.addEventListener('touchstart', (e) => {
+                    if (e.touches.length !== 1) return;
+                    const touch = e.touches[0];
+                    touchStartX = touch.clientX;
+                    touchStartY = touch.clientY;
+                    trackingTouch = true;
+                    swipeReady = false;
 
-                // Only trigger on tap (minimal movement), not drag/scroll
-                if (deltaX > 20 || deltaY > 20) return;
+                    const t = getRibbonTFromClientX(touch.clientX);
+                    if (t !== null) updateMobileInspector(t);
+                }, { passive: true });
 
-                const rect = skyRibbonTouch.getBoundingClientRect();
-                const tapX = touchEndX - rect.left;
-                const ribbonWidth = rect.width;
+                target.addEventListener('touchmove', (e) => {
+                    if (!trackingTouch || e.touches.length !== 1) return;
+                    const touch = e.touches[0];
+                    const dx = touch.clientX - touchStartX;
+                    const dy = touch.clientY - touchStartY;
+                    const absX = Math.abs(dx);
+                    const absY = Math.abs(dy);
 
-                // Tap on left third = previous day, right third = next day
-                if (tapX < ribbonWidth * 0.33) {
-                    currentDayOffset--;
-                    await refreshView();
-                    // Prefetch more past days if approaching the boundary
-                    if (currentDayOffset <= prefetchedPastBoundary + 3) {
-                        prefetchPastDays(currentCity, prefetchedPastBoundary);
+                    if (absX > 52 && absX > absY * 1.35) {
+                        swipeReady = true;
+                        updateMobileInspector(getRibbonTFromClientX(touch.clientX), {
+                            detailOverride: dx < 0 ? 'release for next day' : 'release for previous day',
+                            isGestureHint: true
+                        });
+                        return;
                     }
-                } else if (tapX > ribbonWidth * 0.67) {
-                    if (currentDayOffset < maxFutureOffset) {
-                        currentDayOffset++;
-                        await refreshView();
-                        if (currentDayOffset >= maxFutureOffset) {
-                            showForecastLimitMessage();
-                        }
-                    } else {
-                        showForecastLimitMessage();
+
+                    if (absY <= 48 || absX >= absY) {
+                        const t = getRibbonTFromClientX(touch.clientX);
+                        if (t !== null) updateMobileInspector(t);
                     }
-                }
-            }, { passive: true });
+                }, { passive: true });
+
+                target.addEventListener('touchend', async (e) => {
+                    if (!trackingTouch) return;
+                    trackingTouch = false;
+
+                    const touch = e.changedTouches[0];
+                    const dx = touch.clientX - touchStartX;
+                    const dy = touch.clientY - touchStartY;
+                    const absX = Math.abs(dx);
+                    const absY = Math.abs(dy);
+
+                    if (swipeReady && absX > 72 && absX > absY * 1.2) {
+                        await changeDayBy(dx < 0 ? 1 : -1);
+                        updateMobileInspector();
+                        return;
+                    }
+
+                    const t = getRibbonTFromClientX(touch.clientX);
+                    if (t !== null) updateMobileInspector(t);
+                }, { passive: true });
+
+                target.addEventListener('touchcancel', () => {
+                    trackingTouch = false;
+                    swipeReady = false;
+                    updateMobileInspector();
+                }, { passive: true });
+            };
+
+            bindTouchInspector(skyRibbon);
+            bindTouchInspector(tempOverlay);
         } else {
             // Hide tap indicator on non-touch devices
             const swipeIndicator = document.getElementById('swipeIndicator');
