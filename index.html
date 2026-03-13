@@ -106,16 +106,35 @@
             position: fixed;
         }
 
-        /* On touch devices, hide tooltips and disable overlay to avoid interference with taps */
+        /* Touch devices: enable tooltip inspection with fade */
+        .touch-device #tempCurveOverlay {
+            pointer-events: auto;
+        }
+
+        .touch-device #skyRibbon,
+        .touch-device #tempCurveOverlay {
+            touch-action: pan-y;
+        }
+
+        .mobile-utility-row,
+        .utility-toggle,
+        .mobile-utility-panel,
+        .mobile-utility-btn {
+            display: none;
+        }
+
         .touch-device .temp-tooltip,
         .touch-device .sky-tooltip {
-            display: none !important;
+            opacity: 0;
+            transition: opacity 0.45s ease;
+            margin-top: 0;
+            z-index: 120;
         }
 
-        .touch-device #tempCurveOverlay {
-            pointer-events: none;
+        .touch-device .temp-tooltip.touch-visible,
+        .touch-device .sky-tooltip.touch-visible {
+            opacity: 1;
         }
-
 
         .container {
             width: 100%;
@@ -229,12 +248,24 @@
             text-align: center;
         }
 
-        .week-btn {
+        .sub-buttons {
             position: absolute;
             top: 100%;
             left: 50%;
             transform: translateX(-50%);
             margin-top: 12px;
+            display: flex;
+            gap: 6px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s ease;
+        }
+        .sub-buttons.shown {
+            opacity: 1;
+            pointer-events: auto;
+            transition: opacity 0.25s ease;
+        }
+        .sub-btn {
             background: rgba(255, 255, 255, 0.06);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
@@ -242,20 +273,20 @@
             font-size: 0.7rem;
             padding: 4px 10px;
             cursor: pointer;
-            transition: opacity 0.8s ease, background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+            transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
             letter-spacing: 0.5px;
-            opacity: 0;
-            pointer-events: none;
+            font: inherit;
+            font-size: 0.7rem;
         }
-        .week-btn.shown {
-            opacity: 1;
-            pointer-events: auto;
-            transition: opacity 0.25s ease, background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
-        }
-        .week-btn:hover {
+        .sub-btn:hover {
             background: rgba(255, 255, 255, 0.12);
             border-color: rgba(255, 255, 255, 0.15);
             color: #e8eaef;
+        }
+        .sub-btn.active {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.18);
+            color: rgba(220, 225, 240, 0.9);
         }
 
         .unit-btn {
@@ -345,7 +376,7 @@
             left: 50%;
             transform: translateX(-50%);
             margin-top: 4px;
-            font-size: 0.65rem;
+            font-size: 0.7rem;
             color: rgba(255, 255, 255, 0.5);
             cursor: pointer;
             padding: 4px 12px;
@@ -355,7 +386,7 @@
             white-space: nowrap;
             background: none;
             border: none;
-            font: inherit;
+            font-family: inherit;
         }
         .set-default-btn:hover {
             color: rgba(255, 255, 255, 0.9);
@@ -492,7 +523,7 @@
             height: 18px;
             cursor: pointer;
             opacity: 0;
-            transition: opacity 5s ease-in-out;
+            transition: opacity 8s ease-in-out;
             pointer-events: none;
             position: relative;
             z-index: 5;
@@ -705,15 +736,6 @@
             }
         }
 
-        /* Hide arrows on touch devices */
-        .touch-device .day-arrow {
-            display: none;
-        }
-
-        .touch-device .date-nav {
-            gap: 0;
-        }
-
         /* Swipe indicator for touch devices */
         .swipe-indicator {
             position: fixed;
@@ -870,11 +892,12 @@
             justify-content: center;
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.8s ease;
+            transition: opacity 3s ease;
         }
 
         .hover-title.visible {
             opacity: 1;
+            transition: opacity 0.8s ease;
         }
 
         .hover-title .hover-inner {
@@ -941,6 +964,275 @@
             transition: none;
         }
 
+        /* ── Mobile / touch-device layout ── */
+        body.touch-device {
+            padding-left: max(10px, env(safe-area-inset-left));
+            padding-right: max(10px, env(safe-area-inset-right));
+            padding-top: max(10px, env(safe-area-inset-top));
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+
+        body.touch-device .weather-display-wrapper {
+            padding-bottom: 0;
+        }
+
+        body.touch-device .container {
+            padding-top: 0;
+        }
+
+        body.touch-device .ribbon-wrapper.dynamic-height {
+            min-height: clamp(96px, 28vh, 170px);
+            border-radius: 28px 28px 0 0;
+        }
+
+        /* Portrait: add top space (half sky banner height) and reduce banner heights */
+        @media (orientation: portrait) {
+            body.touch-device {
+                padding-top: max(calc(14vh + env(safe-area-inset-top)), 60px);
+            }
+
+            body.touch-device .ribbon-wrapper.dynamic-height {
+                min-height: clamp(68px, 18vh, 110px);
+                border-radius: 22px 22px 0 0;
+            }
+
+        }
+
+        body.touch-device .day-selector {
+            position: relative;
+            bottom: auto;
+            left: auto;
+            right: auto;
+            margin-top: 12px;
+            opacity: 1;
+        }
+
+        @media (orientation: portrait) {
+            body.touch-device .day-selector {
+                margin-top: 10vh;
+            }
+        }
+
+        body.touch-device .day-selector-content {
+            height: auto;
+            display: grid;
+            grid-template-columns: 52px minmax(0, 1fr) 52px;
+            grid-template-areas:
+                "prev day next"
+                "city city city"
+                "utility utility utility";
+            gap: 10px 12px;
+            align-items: center;
+        }
+
+        body.touch-device .date-nav,
+        body.touch-device .location-section,
+        body.touch-device .day-arrow,
+        body.touch-device .mobile-utility-row {
+            position: static;
+            transform: none;
+        }
+
+        body.touch-device .date-nav {
+            grid-area: day;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        body.touch-device .location-section {
+            grid-area: city;
+            display: flex;
+            justify-content: center;
+        }
+
+        body.touch-device .city-label-wrapper,
+        body.touch-device .day-label-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            width: 100%;
+        }
+
+        body.touch-device #prevDay {
+            grid-area: prev;
+            left: auto;
+            display: flex;
+        }
+
+        body.touch-device #nextDay {
+            grid-area: next;
+            left: auto;
+            display: flex;
+        }
+
+        body.touch-device .day-arrow {
+            width: 52px;
+            height: 34px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.08);
+            color: rgba(225, 232, 245, 0.9);
+        }
+
+        body.touch-device .city-label,
+        body.touch-device .day-label {
+            min-width: 0;
+            padding: 8px 10px;
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(255, 255, 255, 0.06);
+        }
+
+        body.touch-device .city-label {
+            font-size: 0.92rem;
+        }
+
+        body.touch-device .day-label {
+            font-size: 0.86rem;
+            white-space: normal;
+            line-height: 1.25;
+        }
+
+        body.touch-device .random-btn,
+        body.touch-device .sub-buttons,
+        body.touch-device .unit-btn {
+            display: none;
+        }
+
+        body.touch-device .mobile-utility-row {
+            grid-area: utility;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 34px;
+        }
+
+        body.touch-device .utility-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 54px;
+            height: 30px;
+            padding: 0 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(210, 220, 240, 0.66);
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: lowercase;
+            cursor: pointer;
+        }
+
+        body.touch-device .mobile-utility-panel {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        body.touch-device .mobile-utility-panel.visible {
+            display: flex;
+        }
+
+        body.touch-device .mobile-utility-row.expanded .utility-toggle {
+            display: none;
+        }
+
+        body.touch-device .mobile-utility-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 30px;
+            padding: 4px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(220, 228, 242, 0.86);
+            font-size: 0.68rem;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+        }
+
+        body.touch-device .forecast-limit-msg,
+        body.touch-device .set-default-btn {
+            position: static;
+            transform: none;
+            display: block;
+            text-align: center;
+            margin-top: 4px;
+            width: 100%;
+        }
+
+        body.touch-device .year-band-container {
+            margin-top: 16px;
+            height: 16px;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+            transition: opacity 0.9s ease;
+        }
+
+        body.touch-device .year-band-container.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        body.touch-device .swipe-indicator {
+            bottom: calc(env(safe-area-inset-bottom) + 12px);
+            font-size: 0.72rem;
+        }
+
+        @media (max-width: 900px) and (orientation: landscape) {
+            body.touch-device {
+                padding-top: max(6px, env(safe-area-inset-top));
+            }
+
+            body.touch-device .ribbon-wrapper.dynamic-height {
+                min-height: clamp(82px, 22vh, 128px);
+            }
+
+            body.touch-device .day-selector-content {
+                grid-template-columns: 48px minmax(0, 1fr) 48px;
+                grid-template-areas:
+                    "prev day next"
+                    "city city city"
+                    "utility utility utility";
+            }
+
+            body.touch-device .city-label-wrapper,
+            body.touch-device .location-section {
+                justify-content: flex-start;
+            }
+
+            body.touch-device .date-nav,
+            body.touch-device .day-label-wrapper {
+                justify-content: center;
+                align-items: center;
+            }
+
+            body.touch-device .year-band-container {
+                margin-top: 10px;
+                height: 14px;
+            }
+
+            body.touch-device .year-band-container.visible {
+                opacity: 1;
+            }
+
+            body.touch-device .mobile-utility-panel {
+                gap: 6px;
+            }
+
+            body.touch-device .mobile-utility-btn,
+            body.touch-device .utility-toggle {
+                font-size: 0.64rem;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -982,7 +1274,19 @@
                 <div class="date-nav">
                     <div class="day-label-wrapper">
                         <button type="button" class="day-label" id="dayLabel" aria-label="Jump to today">Today</button>
-                        <button type="button" class="week-btn" id="weekBtn" aria-label="Show week preview">week</button>
+                        <div class="sub-buttons" id="subButtons">
+                            <button type="button" class="sub-btn" id="weekBtn" aria-label="Show week preview">week</button>
+                            <button type="button" class="sub-btn" id="yearBtn" aria-label="Show year band">year</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mobile-utility-row" id="mobileUtilityRow">
+                    <button type="button" class="utility-toggle" id="utilityToggle" aria-label="Show more controls">more</button>
+                    <div class="mobile-utility-panel" id="mobileUtilityPanel">
+                        <button type="button" class="mobile-utility-btn" id="mobileRandomBtn" aria-label="Pick random city">random</button>
+                        <button type="button" class="mobile-utility-btn" id="mobileWeekBtn" aria-label="Show week preview">week</button>
+                        <button type="button" class="mobile-utility-btn" id="mobileYearBtn" aria-label="Show year band">year</button>
+                        <button type="button" class="mobile-utility-btn" id="mobileUnitBtn" aria-label="Toggle temperature unit">°C</button>
                     </div>
                 </div>
             </div>
@@ -992,7 +1296,7 @@
         <canvas id="yearBandCanvas"></canvas>
         <div class="year-band-tooltip" id="yearBandTooltip"></div>
     </div>
-    <div class="swipe-indicator" id="swipeIndicator">tap left/right of sky to change day</div>
+    <div class="swipe-indicator" id="swipeIndicator">tap to inspect, swipe to change day</div>
     <canvas id="worldMapCanvas"></canvas>
 
     <script>
@@ -1408,7 +1712,7 @@
             heatmapFadeTimeout = setTimeout(() => {
                 heatmapFadeTimeout = null;
                 startHeatmapFade(canvas);
-            }, 3000);
+            }, 6000);
         }
         const HEATMAP_LAT_MIN = -60, HEATMAP_LAT_MAX = 80;
         const HEATMAP_LON_MIN = -180, HEATMAP_LON_MAX = 170;
@@ -1768,7 +2072,15 @@
             currentMapLat = cityLat;
             currentMapLon = cityLon;
 
-            // Fetch heatmap grid for current date (skip if already cached for this date)
+            // If map is already visible, animate the dot (outlines only, no heatmap)
+            if (mapAlreadyVisible) {
+                cancelHeatmapFade();
+                animateDotTransition(canvas, prevLat, prevLon, cityLat, cityLon, 800, false);
+                scheduleMapFadeOut(canvas);
+                return;
+            }
+
+            // Fetch heatmap grid for current date (only on first show)
             const city = cities[currentCity];
             const dateStr = getDateForOffset(city, currentDayOffset);
             const cachedHeatmap = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
@@ -1789,15 +2101,6 @@
                         drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots, currentHeatmapGrid);
                     }
                 }).catch(e => console.error('Heatmap fetch failed:', e));
-            }
-
-            // If map is already visible, animate the dot (outlines only, no heatmap)
-            if (mapAlreadyVisible) {
-                cancelHeatmapFade();
-                animateDotTransition(canvas, prevLat, prevLon, cityLat, cityLon, 800, false);
-                showYearBand();
-                scheduleMapFadeOut(canvas);
-                return;
             }
 
             canvas.classList.remove('visible');
@@ -1846,7 +2149,6 @@
             canvas.style.pointerEvents = '';
             canvas.offsetHeight; // force reflow
             canvas.classList.add('visible');
-            showYearBand();
 
             // After 8 seconds, fade out entire map
             scheduleMapFadeOut(canvas);
@@ -1862,6 +2164,9 @@
                 // Keep clickable during the 5s fade-out
                 canvas.style.pointerEvents = 'auto';
                 canvas.classList.remove('visible');
+                // Fade out year band together with map
+                if (yearBandAutoFadeTimer) { clearTimeout(yearBandAutoFadeTimer); yearBandAutoFadeTimer = null; }
+                hideYearBand();
                 // Clean up after the 5s fade-out transition completes
                 mapClearTimeout = setTimeout(() => {
                     if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
@@ -1874,8 +2179,6 @@
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     canvas.style.width = '0';
                     canvas.style.height = '0';
-                    // Map fully gone — start year band fade
-                    scheduleYearBandFadeOut();
                 }, 5500);
             }, delay);
         }
@@ -1968,7 +2271,6 @@
 
             // Update weather display (skip temp range recalc now; recalcs on day change)
             await refreshView(true);
-            showYearBand();
             prefetchRemainingDays(cityKey);
         });
 
@@ -2026,10 +2328,12 @@
         let currentDayOffset = 0; // 0 = today, positive = future, negative = past
         const maxFutureOffset = 14; // Today + 14 days ahead (API limit)
         const historyBatchSize = 7; // Days to prefetch when going back in time
+        let isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
         // Current weather data
         let fullWeatherData = null;
         let weatherData = {};
+        let mobileUtilityHideTimer = null;
 
         // Helper to get date string for a given offset from today in city's timezone
         function getDateForOffset(city, dayOffset) {
@@ -2531,7 +2835,7 @@
             }
         }
 
-        // Initial prefetch for future days
+        // Initial prefetch for future days + past week
         async function prefetchRemainingDays(cityKey) {
             if (prefetchInProgress && prefetchedCity === cityKey) return;
             prefetchInProgress = true;
@@ -2539,6 +2843,11 @@
             prefetchedPastBoundary = 0; // Reset past boundary for new city
 
             await prefetchFutureDays(cityKey);
+
+            // Prefetch past week after future days are done
+            if (prefetchedCity === cityKey) {
+                await prefetchPastDays(cityKey, 0);
+            }
 
             if (prefetchedCity === cityKey) {
                 prefetchInProgress = false;
@@ -2557,11 +2866,8 @@
 
             // Check if temp range needs recalculation
             const needsTempRecalc = !skipTempRangeRecalc && (tempRangeCity !== currentCity || needsTempRangeRecalc(currentDayOffset));
-            // Only show loading if data isn't already cached
-            const needsLoading = !isDataCached(currentCity, currentDayOffset) || needsTempRecalc;
-            if (needsLoading) {
-                showLoading();
-            }
+            // Keep old visuals on screen while loading — no loading overlay
+            // Old canvas content remains until new data is drawn over it
             try {
                 // Recalculate temperature display range when city changes or every 30 days back
                 if (needsTempRecalc) {
@@ -2626,9 +2932,6 @@
                     console.error('Refresh failed:', error);
                 }
             } finally {
-                if (needsLoading && refreshToken === refreshRequestToken) {
-                    hideLoading();
-                }
                 if (refreshToken === refreshRequestToken) {
                     activeRefreshController = null;
                 }
@@ -2787,10 +3090,11 @@
             const canvas = document.getElementById('skyRibbon');
             const wrapper = canvas.parentElement;
 
-            // Calculate dimensions
-            const fullBaseHeight = 240; // Full height for the sky/cloud portion (doubled)
-            const skyExtensionHeight = 36; // Sky gradient fade distance (reduced by 40%)
-            const precipExtensionHeight = 200; // Rain/snow extends down over page background
+            // Calculate dimensions — reduce on portrait touch devices
+            const isPortraitTouch = isTouchDevice && window.innerHeight > window.innerWidth;
+            const fullBaseHeight = isPortraitTouch ? 160 : 240;
+            const skyExtensionHeight = isPortraitTouch ? 24 : 36;
+            const precipExtensionHeight = isPortraitTouch ? 130 : 200;
             const fullTotalHeight = fullBaseHeight + precipExtensionHeight;
 
             // Crop top portion of the sky (removes cloud puffs, shows only lower sky gradient)
@@ -3197,12 +3501,15 @@
             ctx.setTransform(2, 0, 0, 2, 0, 0);
 
             // Draw the temperature curve with gradient fill
-            const curveHeight = Math.min(height * 0.396, 216); // Curve height, capped (50% taller)
+            const isPortraitTouch = isTouchDevice && window.innerHeight > window.innerWidth;
+            const curveHeightCap = isPortraitTouch ? 140 : 216;
+            const curveUpShift = isPortraitTouch ? 100 : 160;
+            const curveHeight = Math.min(height * 0.396, curveHeightCap);
             // The reference line top is at curveBottom - (maxTempNorm * curveHeight * 0.8)
             // where maxTempNorm = (45 + 25) / 60 = 1.167 (clamped to ~1)
             // So reference line top offset from curveBottom is about curveHeight * 0.8
-            // We want that point to be at skyBottomInWrapper, then shift up 200px
-            const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
+            // We want that point to be at skyBottomInWrapper, then shift up proportionally
+            const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - curveUpShift;
             const curveTop = curveBottom - curveHeight;
 
             // Get sky ribbon bounds relative to the canvas (which starts at 0)
@@ -3428,33 +3735,36 @@
             };
         }
 
-        // Initialize wind streaks based on weather data
-        // Streaks are positioned at fixed X locations (corresponding to hours)
+        // Wind streak lifecycle constants
+        const STREAK_LIFESPAN = 2.0;         // seconds each streak lives
+        const STREAK_FADE_DURATION = 0.35;   // fade-in and fade-out duration
+        const TARGET_STREAK_COUNT = 80;      // target number of active streaks
+
+        // Spawn a single wind streak at a random position
+        function spawnStreak(bounds, birthTime) {
+            const lifespan = STREAK_LIFESPAN * (0.7 + Math.random() * 0.6);
+            return {
+                x: Math.random() * bounds.width,
+                baseY: Math.random(),           // 0–1 normalized vertical offset
+                length: 30 + Math.random() * 50,
+                phase: Math.random() * Math.PI * 2,
+                speed: 0.5 + Math.random() * 1.5,
+                opacity: 0.25 + Math.random() * 0.35,
+                seed: Math.random() * 1000,
+                birthTime: birthTime,
+                lifespan: lifespan
+            };
+        }
+
+        // Initialize wind streaks — pre-spawn with staggered ages so field starts full
         function initWindStreaks() {
             windStreaks = [];
             if (!hasSubstantialWind()) return;
 
             const bounds = getWindBounds();
-
-            // Create streaks at fixed horizontal positions across the ribbon
-            // Multiple streaks per column for density
-            const columnsCount = 40; // Number of x positions (halved for less density)
-            const streaksPerColumn = 2; // Reduced from 3
-
-            for (let col = 0; col < columnsCount; col++) {
-                const xPos = (col / columnsCount) * bounds.width;
-                for (let s = 0; s < streaksPerColumn; s++) {
-                    windStreaks.push({
-                        x: xPos,
-                        y: Math.random() * bounds.height,
-                        baseY: Math.random() * bounds.height, // Fixed base Y position
-                        length: 30 + Math.random() * 50,
-                        phase: Math.random() * Math.PI * 2, // Animation phase offset
-                        speed: 0.5 + Math.random() * 1.5, // Animation speed
-                        opacity: 0.25 + Math.random() * 0.35,
-                        seed: Math.random() * 1000
-                    });
-                }
+            for (let i = 0; i < TARGET_STREAK_COUNT; i++) {
+                // Stagger birth times so streaks are at various lifecycle stages
+                windStreaks.push(spawnStreak(bounds, -Math.random() * STREAK_LIFESPAN));
             }
         }
 
@@ -3495,24 +3805,32 @@
             const bounds = getWindBounds();
             const time = timestamp / 1000;
 
+            // Lifecycle: remove expired streaks, spawn replacements
+            windStreaks = windStreaks.filter(s => (time - s.birthTime) < s.lifespan);
+            while (windStreaks.length < TARGET_STREAK_COUNT) {
+                windStreaks.push(spawnStreak(bounds, time));
+            }
+
             // Temperature curve parameters (same as in drawTemperatureCurve)
-            // Get sky ribbon position for proper curve placement
             const skyRibbonEl = document.getElementById('skyRibbon');
             const skyRect = skyRibbonEl.getBoundingClientRect();
             const skyBottomInWrapper = (skyRect.bottom - wrapperRect.top);
             const curveHeight = Math.min(height * 0.396, 216);
             const curveBottom = skyBottomInWrapper + curveHeight * 0.8 - 160;
-            const curveTop = curveBottom - curveHeight;
-
-            // Horizontal orientation
-            const angle = 0;
 
             // Small vertical offset above the temperature curve (negative = above)
             const verticalOffset = -5;
 
             // Draw each wind streak
             windStreaks.forEach(streak => {
-                // Get wind data at streak's fixed x position (normalized 0-1 across ribbon width)
+                // Lifecycle fade envelope
+                const age = time - streak.birthTime;
+                const fadeIn = Math.min(1, age / STREAK_FADE_DURATION);
+                const fadeOut = Math.min(1, (streak.lifespan - age) / STREAK_FADE_DURATION);
+                const lifecycleAlpha = Math.min(fadeIn, fadeOut);
+                if (lifecycleAlpha < 0.01) return;
+
+                // Get wind data at streak's x position (normalized 0-1 across ribbon width)
                 const t = streak.x / bounds.width;
                 const tClamped = Math.max(0, Math.min(1, t));
                 const windSpeed = interpolateData(weatherData.windSpeed, tClamped);
@@ -3526,34 +3844,44 @@
                 const windIntensity = (windSpeed - WIND_THRESHOLD) / (1 - WIND_THRESHOLD);
                 const streakLength = streak.length * (0.5 + windIntensity);
 
-                // Animated shimmer effect - opacity pulses over time
-                const shimmer = 0.5 + 0.5 * Math.sin(time * streak.speed + streak.phase);
+                // Animation speed scales with wind: faster above 30 km/h
+                const fastWindThreshold = 0.375; // 30 km/h normalized
+                const speedMultiplier = windSpeed > fastWindThreshold
+                    ? 1 + ((windSpeed - fastWindThreshold) / (1 - fastWindThreshold)) * 3
+                    : 1;
 
                 // Calculate screen coordinates
-                // X is fixed at the streak's horizontal position
                 const screenX = bounds.left + streak.x;
-                // Y is at the temperature curve position - offset (above) - streak's baseY offset
                 const tempY = curveBottom - (mapTempToDisplayRange(tempValue) * curveHeight * 0.8);
-                const screenY = tempY + verticalOffset - streak.baseY * 0.3; // baseY provides variation above
+                const screenY = tempY + verticalOffset - streak.baseY * 30;
                 const endX = screenX + streakLength;
-                const endY = screenY + angle * streakLength;
+                const endY = screenY;
 
-                // Calculate streak color - white for visibility
+                // Calculate alpha with lifecycle envelope
                 const brightness = 255;
-                // Fade based on distance from temperature curve
-                const distFromCurve = streak.baseY * 0.3;
+                const distFromCurve = streak.baseY * 30;
                 const distanceFade = Math.max(0, 1 - distFromCurve / 30);
-                const alpha = streak.opacity * windIntensity * (0.7 + dayValue * 0.3) * 6.5 * distanceFade * shimmer;
+                const peakAlpha = streak.opacity * windIntensity * (0.7 + dayValue * 0.3) * 6.5 * distanceFade * lifecycleAlpha;
 
-                // Skip if too faint
-                if (alpha < 0.02) return;
+                if (peakAlpha < 0.02) return;
 
-                // Draw the wind streak as a tapered line
+                // Traveling bright spot: sweeps left→right along streak
+                const travelSpeed = streak.speed * speedMultiplier * 0.5;
+                const travelPhase = ((time * travelSpeed + streak.phase) % 1 + 1) % 1;
+                const baseAlpha = peakAlpha * 0.3;
+                const spotWidth = 0.25;
+
+                // Build gradient with traveling bright spot + edge taper
                 const gradient = ctx.createLinearGradient(screenX, screenY, endX, endY);
-                gradient.addColorStop(0, `rgba(${brightness}, ${brightness}, ${brightness + 10}, 0)`);
-                gradient.addColorStop(0.15, `rgba(${brightness}, ${brightness}, ${brightness + 10}, ${alpha})`);
-                gradient.addColorStop(0.7, `rgba(${brightness}, ${brightness}, ${brightness + 10}, ${alpha * 0.7})`);
-                gradient.addColorStop(1, `rgba(${brightness}, ${brightness}, ${brightness + 10}, 0)`);
+                const stops = [0, 0.08, 0.2, 0.35, 0.5, 0.65, 0.8, 0.92, 1.0];
+                for (const s of stops) {
+                    let dist = Math.abs(s - travelPhase);
+                    dist = Math.min(dist, 1 - dist);
+                    const spotBright = Math.max(0, 1 - dist / spotWidth);
+                    const a = baseAlpha + (peakAlpha - baseAlpha) * spotBright;
+                    const edgeFade = s < 0.1 ? s / 0.1 : s > 0.9 ? (1 - s) / 0.1 : 1;
+                    gradient.addColorStop(s, `rgba(${brightness}, ${brightness}, ${brightness + 10}, ${a * edgeFade})`);
+                }
 
                 ctx.strokeStyle = gradient;
                 ctx.lineWidth = 1 + windIntensity;
@@ -3879,8 +4207,8 @@
                 ctx.fill();
             }
 
-            // On touch devices, always show; on desktop, show when map is active or mousemove controls visibility
-            if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || isWorldMapActive()) {
+            // Show when map is active (both desktop and mobile)
+            if (isWorldMapActive()) {
                 container.classList.add('visible');
             }
         }
@@ -3975,67 +4303,57 @@
         }
 
         // Year band auto-show/hide on mouse proximity (desktop only)
-        let yearBandFadeTimeout = null;
-        let yearBandCleanupTimeout = null;
 
         function isWorldMapActive() {
             const mc = document.getElementById('worldMapCanvas');
             return mc && (mc.classList.contains('visible') || mc.style.pointerEvents === 'auto');
         }
 
+        let yearBandAutoFadeTimer = null;
+        let yearBandMouseOver = false;
+
+        function hideYearBand() {
+            const container = document.getElementById('yearBandContainer');
+            if (container) container.classList.remove('visible');
+            const btn = document.getElementById('yearBtn');
+            if (btn) btn.classList.remove('active');
+        }
+
+        function scheduleYearBandAutoFade() {
+            if (yearBandAutoFadeTimer) { clearTimeout(yearBandAutoFadeTimer); yearBandAutoFadeTimer = null; }
+            yearBandAutoFadeTimer = setTimeout(() => {
+                yearBandAutoFadeTimer = null;
+                if (yearBandMouseOver) return; // will be scheduled again on mouseleave
+                hideYearBand();
+            }, 5000);
+        }
+
         function showYearBand() {
             const container = document.getElementById('yearBandContainer');
             if (!container) return;
-            if (yearBandFadeTimeout) { clearTimeout(yearBandFadeTimeout); yearBandFadeTimeout = null; }
-            if (yearBandCleanupTimeout) { clearTimeout(yearBandCleanupTimeout); yearBandCleanupTimeout = null; }
-            container.style.pointerEvents = '';
+            if (yearBandAutoFadeTimer) { clearTimeout(yearBandAutoFadeTimer); yearBandAutoFadeTimer = null; }
             if (!container.classList.contains('visible')) {
                 container.classList.add('visible');
             }
+            scheduleYearBandAutoFade();
         }
 
-        function scheduleYearBandFadeOut() {
-            if (yearBandFadeTimeout || yearBandCleanupTimeout) return;
-            if (isWorldMapActive()) return;
+        // Pause auto-fade while mouse is over the year band
+        (function initYearBandMousePause() {
             const container = document.getElementById('yearBandContainer');
-            if (!container.classList.contains('visible')) return;
-            yearBandFadeTimeout = setTimeout(() => {
-                yearBandFadeTimeout = null;
-                container.style.pointerEvents = 'auto';
-                container.classList.remove('visible');
-                yearBandCleanupTimeout = setTimeout(() => {
-                    yearBandCleanupTimeout = null;
-                    container.style.pointerEvents = '';
-                }, 5500);
-            }, 10000);
-        }
+            if (!container) return;
+            container.addEventListener('mouseenter', () => {
+                yearBandMouseOver = true;
+                if (yearBandAutoFadeTimer) { clearTimeout(yearBandAutoFadeTimer); yearBandAutoFadeTimer = null; }
+            });
+            container.addEventListener('mouseleave', () => {
+                yearBandMouseOver = false;
+                if (container.classList.contains('visible')) {
+                    scheduleYearBandAutoFade();
+                }
+            });
+        })();
 
-        function initYearBandHover() {
-            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
-            addRafMousemoveListener(document, (e) => {
-                const container = document.getElementById('yearBandContainer');
-                if (!container) return;
-                const rect = container.getBoundingClientRect();
-                // Show when hovering over the band area (with 20px above for easier targeting) or when map is active
-                const hoverZoneTop = rect.top - 20;
-                if (((e.clientY >= hoverZoneTop && e.clientY <= rect.bottom) || isWorldMapActive()) &&
-                    getBoundedCacheEntry(yearBandCache, yearBandCacheOrder, currentCity)) {
-                    showYearBand();
-                } else if (container.classList.contains('visible') || container.style.pointerEvents === 'auto') {
-                    if (!yearBandFadeTimeout && !yearBandCleanupTimeout) {
-                        scheduleYearBandFadeOut();
-                    }
-                }
-            });
-            document.addEventListener('mouseleave', () => {
-                const container = document.getElementById('yearBandContainer');
-                if (container && (container.classList.contains('visible') || container.style.pointerEvents === 'auto')) {
-                    if (!yearBandFadeTimeout && !yearBandCleanupTimeout) {
-                        scheduleYearBandFadeOut();
-                    }
-                }
-            });
-        }
 
         // Initialize all visualizations (static, no animation)
         let timeMarkerFadeTimer = null;
@@ -4150,6 +4468,7 @@
             drawYearBand();
             startWindAnimation();
             updateTimeMarker();
+            updateOverlayPosition();
         }
 
         // Handle resize with debounce
@@ -4349,7 +4668,10 @@
             });
         }
 
-        document.getElementById('cityLabel').addEventListener('click', startCityEdit);
+        document.getElementById('cityLabel').addEventListener('click', (e) => {
+            if (isTouchDevice) collapseMobileUtilities();
+            startCityEdit(e);
+        });
 
         // Update city label when view refreshes
         function updateCityLabel() {
@@ -4412,17 +4734,59 @@
             }, 5000);
         }
 
-        // Handle day navigation
-        document.getElementById('prevDay').addEventListener('click', async () => {
-            currentDayOffset--;
-            await refreshView();
-            // Prefetch more past days if approaching the boundary
-            if (currentDayOffset <= prefetchedPastBoundary + 3) {
-                prefetchPastDays(currentCity, prefetchedPastBoundary);
-            }
-        });
+        // ── Mobile utility panel functions ──
+        function setUtilityButtonsText() {
+            const unitText = useFahrenheit ? '°F' : '°C';
+            document.getElementById('unitBtn').textContent = unitText;
+            const mobileUnitBtn = document.getElementById('mobileUnitBtn');
+            if (mobileUnitBtn) mobileUnitBtn.textContent = unitText;
+        }
 
-        document.getElementById('nextDay').addEventListener('click', async () => {
+        function collapseMobileUtilities() {
+            if (!isTouchDevice) return;
+            const row = document.getElementById('mobileUtilityRow');
+            const panel = document.getElementById('mobileUtilityPanel');
+            if (mobileUtilityHideTimer) {
+                clearTimeout(mobileUtilityHideTimer);
+                mobileUtilityHideTimer = null;
+            }
+            if (row) row.classList.remove('expanded');
+            if (panel) panel.classList.remove('visible');
+        }
+
+        function scheduleMobileUtilitiesHide(delay = 3200) {
+            if (!isTouchDevice) return;
+            if (mobileUtilityHideTimer) clearTimeout(mobileUtilityHideTimer);
+            mobileUtilityHideTimer = setTimeout(() => {
+                mobileUtilityHideTimer = null;
+                collapseMobileUtilities();
+            }, delay);
+        }
+
+        function revealMobileUtilities(delay = 3200) {
+            if (!isTouchDevice) return;
+            const row = document.getElementById('mobileUtilityRow');
+            const panel = document.getElementById('mobileUtilityPanel');
+            if (!row || !panel) return;
+            row.classList.add('expanded');
+            panel.classList.add('visible');
+            scheduleMobileUtilitiesHide(delay);
+        }
+
+        // ── Day navigation (shared desktop + mobile) ──
+        async function changeDayBy(delta) {
+            if (delta === 0) return;
+            if (isTouchDevice) collapseMobileUtilities();
+
+            if (delta < 0) {
+                currentDayOffset--;
+                await refreshView();
+                if (currentDayOffset <= prefetchedPastBoundary + 3) {
+                    prefetchPastDays(currentCity, prefetchedPastBoundary);
+                }
+                return;
+            }
+
             if (currentDayOffset < maxFutureOffset) {
                 currentDayOffset++;
                 await refreshView();
@@ -4432,22 +4796,33 @@
             } else {
                 showForecastLimitMessage();
             }
+        }
+
+        document.getElementById('prevDay').addEventListener('click', async () => {
+            await changeDayBy(-1);
+        });
+
+        document.getElementById('nextDay').addEventListener('click', async () => {
+            await changeDayBy(1);
         });
 
         // Click on day label to go to today
         document.getElementById('dayLabel').addEventListener('click', async () => {
+            if (isTouchDevice) collapseMobileUtilities();
             if (currentDayOffset !== 0) {
                 currentDayOffset = 0;
                 await refreshView();
             }
         });
 
-        // Show/hide random & week buttons with linger timer
+        // Show/hide random & week buttons with linger timer (desktop only)
         (function() {
+            if (isTouchDevice) return;
             const LINGER_MS = 3000;
-            function setupBtnHover(triggerEl, btnEl) {
+            function setupBtnHover(triggerEl, btnEl, canShow) {
                 let timer = null;
                 function show() {
+                    if (canShow && !canShow()) return;
                     if (timer) { clearTimeout(timer); timer = null; }
                     btnEl.classList.add('shown');
                 }
@@ -4460,32 +4835,30 @@
                 btnEl.addEventListener('mouseenter', show);
                 btnEl.addEventListener('mouseleave', scheduleHide);
             }
-            setupBtnHover(document.querySelector('.city-label-wrapper'), document.getElementById('randomBtn'));
-            setupBtnHover(document.querySelector('.day-label-wrapper'), document.getElementById('weekBtn'));
+            setupBtnHover(document.querySelector('.city-label-wrapper'), document.getElementById('randomBtn'), () => !document.querySelector('.set-default-btn'));
+            setupBtnHover(document.querySelector('.day-label-wrapper'), document.getElementById('subButtons'));
             setupBtnHover(document.getElementById('unitBtn'), document.getElementById('unitBtn'));
         })();
 
         // Handle unit toggle button
-        document.getElementById('unitBtn').textContent = useFahrenheit ? '°F' : '°C';
+        setUtilityButtonsText();
         document.getElementById('unitBtn').addEventListener('click', () => {
             useFahrenheit = !useFahrenheit;
             localStorage.setItem('useFahrenheit', useFahrenheit);
-            document.getElementById('unitBtn').textContent = useFahrenheit ? '°F' : '°C';
-            // Redraw only temp-sensitive elements (not time marker)
+            setUtilityButtonsText();
             drawTemperatureCurve();
             drawYearBand();
+            if (isTouchDevice) scheduleMobileUtilitiesHide();
         });
 
-        // Handle random capital button
-        document.getElementById('randomBtn').addEventListener('click', async () => {
-            currentExtraDots = null; // Clear similar-city dots
-            // Pick a random capital different from current
+        // Handle random capital button (extracted for reuse by mobile utility)
+        async function pickRandomCapital() {
+            currentExtraDots = null;
             let randomCapital;
             do {
                 randomCapital = worldCapitals[Math.floor(Math.random() * worldCapitals.length)];
             } while (cities[currentCity] && randomCapital.name === cities[currentCity].name);
 
-            // Create a new city entry
             const cityKey = randomCapital.name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
             addOrUpdateCity(cityKey, {
                 name: randomCapital.name,
@@ -4494,19 +4867,20 @@
                 timezone: randomCapital.timezone
             });
             currentCity = cityKey;
-            currentDayOffset = 0; // Reset to today's view
+            currentDayOffset = 0;
 
-            // Skip temp range recalculation to keep the temperature bar unchanged
             await refreshView(true);
             prefetchRemainingDays(cityKey);
-
-            // Show world map overlay with the chosen city
             showWorldMap(randomCapital.lat, randomCapital.lon);
-        });
+        }
+
+        document.getElementById('randomBtn').addEventListener('click', pickRandomCapital);
 
         // Week view: show 5 stacked temperature curves
         let weekViewTimer = null;
         let weekViewFadeTimer = null;
+
+        let weekViewWanted = false; // tracks desired state across async loads
 
         async function showWeekView() {
             // Cancel any existing timers
@@ -4514,24 +4888,57 @@
             if (weekViewFadeTimer) { clearTimeout(weekViewFadeTimer); weekViewFadeTimer = null; }
 
             const canvas = document.getElementById('weekViewCanvas');
+
+            // Toggle off if already visible or in-progress
+            if (weekViewWanted) {
+                weekViewWanted = false;
+                canvas.classList.remove('visible');
+                weekViewFadeTimer = setTimeout(() => {
+                    weekViewFadeTimer = null;
+                    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                }, 800);
+                return;
+            }
+            weekViewWanted = true;
             const ctx = canvas.getContext('2d');
             const skyRibbonEl = document.getElementById('skyRibbon');
             const wrapper = document.getElementById('weatherDisplayWrapper');
             const skyRect = skyRibbonEl.getBoundingClientRect();
             const wrapperRect = wrapper.getBoundingClientRect();
 
-            // Position and size relative to the sky ribbon
+            // Position and size: week curves sit above the main temp curve as a vertical sequence
             const ribbonLeft = skyRect.left - wrapperRect.left;
             const ribbonWidth = skyRect.width;
-            const rowHeight = 36;
-            const rowGap = 2;
             const numDays = 4; // Next 4 days (today is already shown)
-            const padding = 8;
-            const totalHeight = numDays * rowHeight + (numDays - 1) * rowGap + padding * 2;
+            const padding = 10;
+
+            // Find where the main temp curve top is (replicate drawTemperatureCurve math)
+            const wHeight = wrapperRect.height || window.innerHeight * 0.6;
+            const skyBottomInWrapper = skyRect.bottom - wrapperRect.top;
+            const isPortraitTouchW = isTouchDevice && window.innerHeight > window.innerWidth;
+            const curveHeightCapW = isPortraitTouchW ? 140 : 216;
+            const curveUpShiftW = isPortraitTouchW ? 100 : 160;
+            const mainCurveHeight = Math.min(wHeight * 0.396, curveHeightCapW);
+            const mainCurveBottom = skyBottomInWrapper + mainCurveHeight * 0.8 - curveUpShiftW;
+            const mainCurveTop = mainCurveBottom - mainCurveHeight;
+
+            // Available space: from wrapper top to main curve top (with slight overlap)
+            const overlapWithMain = 50; // px overlap with main curve for seamless feel
+            const availableHeight = mainCurveTop + overlapWithMain;
             const labelWidth = 42;
 
-            // Position canvas over the sky ribbon
-            canvas.style.top = (skyRect.top - wrapperRect.top) + 'px';
+            // Derive row dimensions from available space
+            // totalHeight = numDays * rowHeight + (numDays-1) * rowGap + 2*padding
+            // rowGap = -overlapFrac * rowHeight
+            // availableHeight = numDays * rh - (numDays-1) * overlapFrac * rh + 2*padding
+            // rh = (availableHeight - 2*padding) / (numDays - (numDays-1)*overlapFrac)
+            const overlapFrac = 0.35;
+            const rowHeight = Math.max(40, (availableHeight - 2 * padding) / (numDays - (numDays - 1) * overlapFrac));
+            const rowGap = -overlapFrac * rowHeight;
+            const totalHeight = numDays * rowHeight + (numDays - 1) * rowGap + padding * 2;
+
+            // Panel top at 0 (wrapper top)
+            canvas.style.top = '0px';
             canvas.style.left = ribbonLeft + 'px';
             canvas.style.width = ribbonWidth + 'px';
             canvas.style.height = totalHeight + 'px';
@@ -4539,8 +4946,13 @@
             canvas.height = totalHeight * 2;
             ctx.setTransform(2, 0, 0, 2, 0, 0);
 
-            // Dark background with rounded corners
-            ctx.fillStyle = 'rgba(13, 17, 23, 0.92)';
+            // Dark background with gradient fade at bottom for seamless transition to main curve
+            const bgGrad = ctx.createLinearGradient(0, 0, 0, totalHeight);
+            bgGrad.addColorStop(0, 'rgba(13, 17, 23, 0.92)');
+            bgGrad.addColorStop(0.6, 'rgba(13, 17, 23, 0.85)');
+            bgGrad.addColorStop(0.85, 'rgba(13, 17, 23, 0.4)');
+            bgGrad.addColorStop(1, 'rgba(13, 17, 23, 0.0)');
+            ctx.fillStyle = bgGrad;
             ctx.beginPath();
             ctx.roundRect(0, 0, ribbonWidth, totalHeight, 20);
             ctx.fill();
@@ -4569,8 +4981,8 @@
                 const displayHours = endHour - startHour;
 
                 const rowTop = padding + (numDays - 1 - i) * (rowHeight + rowGap);
-                const curveBottom = rowTop + rowHeight - 4;
-                const curveYRange = rowHeight - 8;
+                const curveBottom = rowTop + rowHeight - 6;
+                const curveYRange = rowHeight - 12;
                 const curveLeft = labelWidth;
                 const curveWidth = ribbonWidth - labelWidth - 10;
 
@@ -4608,7 +5020,7 @@
                     const gradient = ctx.createLinearGradient(d.x, d.y, d.x, curveBottom);
                     for (let s = 0; s <= 8; s++) {
                         const gt = s / 8;
-                        gradient.addColorStop(gt, colorToString(d.color, 0.35 * d.brightness * Math.pow(1 - gt, 2.5)));
+                        gradient.addColorStop(gt, colorToString(d.color, 0.25 * d.brightness * Math.pow(1 - gt, 2.5)));
                     }
                     ctx.fillStyle = gradient;
                     ctx.fillRect(d.x, d.y, 1.5, curveBottom - d.y);
@@ -4665,21 +5077,115 @@
                 ctx.fillText(dayName, 10, rowTop + rowHeight / 2);
             }
 
-            // Show with fade-in
+            // Show with fade-in (skip if user toggled off while loading)
+            if (!weekViewWanted) return;
             canvas.classList.add('visible');
 
-            // Auto-hide after 5 seconds
+            // Auto-hide after 5 seconds (paused while hovering week button)
+            scheduleWeekViewFadeOut();
+        }
+
+        let weekBtnHovered = false;
+
+        function scheduleWeekViewFadeOut() {
+            if (weekViewTimer) { clearTimeout(weekViewTimer); weekViewTimer = null; }
             weekViewTimer = setTimeout(() => {
                 weekViewTimer = null;
+                if (weekBtnHovered) return; // don't fade while cursor is on button
+                weekViewWanted = false;
+                const canvas = document.getElementById('weekViewCanvas');
                 canvas.classList.remove('visible');
                 weekViewFadeTimer = setTimeout(() => {
                     weekViewFadeTimer = null;
+                    const ctx = canvas.getContext('2d');
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                 }, 800);
             }, 5000);
         }
 
-        document.getElementById('weekBtn').addEventListener('click', showWeekView);
+        const weekBtnEl = document.getElementById('weekBtn');
+        weekBtnEl.addEventListener('click', showWeekView);
+        weekBtnEl.addEventListener('mouseenter', () => {
+            weekBtnHovered = true;
+            if (weekViewTimer) { clearTimeout(weekViewTimer); weekViewTimer = null; }
+        });
+        weekBtnEl.addEventListener('mouseleave', () => {
+            weekBtnHovered = false;
+            const canvas = document.getElementById('weekViewCanvas');
+            if (canvas.classList.contains('visible')) {
+                scheduleWeekViewFadeOut();
+            }
+        });
+
+        // Year button: toggle year band visibility (desktop)
+        document.getElementById('yearBtn').addEventListener('click', () => {
+            const container = document.getElementById('yearBandContainer');
+            const btn = document.getElementById('yearBtn');
+            if (!container) return;
+            if (container.classList.contains('visible')) {
+                if (yearBandAutoFadeTimer) { clearTimeout(yearBandAutoFadeTimer); yearBandAutoFadeTimer = null; }
+                container.classList.remove('visible');
+                btn.classList.remove('active');
+            } else {
+                if (!getBoundedCacheEntry(yearBandCache, yearBandCacheOrder, currentCity)) {
+                    fetchYearBandData(currentCity).then(() => drawYearBand());
+                }
+                showYearBand();
+                btn.classList.add('active');
+            }
+        });
+
+        // ── Mobile utility button wiring ──
+        const utilityToggle = document.getElementById('utilityToggle');
+        if (utilityToggle) {
+            utilityToggle.addEventListener('click', () => {
+                const panel = document.getElementById('mobileUtilityPanel');
+                if (panel && panel.classList.contains('visible')) {
+                    collapseMobileUtilities();
+                } else {
+                    revealMobileUtilities();
+                }
+            });
+        }
+
+        const mobileRandomBtn = document.getElementById('mobileRandomBtn');
+        if (mobileRandomBtn) {
+            mobileRandomBtn.addEventListener('click', async () => {
+                revealMobileUtilities();
+                await pickRandomCapital();
+                scheduleMobileUtilitiesHide(1800);
+            });
+        }
+
+        const mobileWeekBtn = document.getElementById('mobileWeekBtn');
+        if (mobileWeekBtn) {
+            mobileWeekBtn.addEventListener('click', () => {
+                revealMobileUtilities();
+                showWeekView();
+                scheduleMobileUtilitiesHide(1800);
+            });
+        }
+
+        const mobileYearBtn = document.getElementById('mobileYearBtn');
+        if (mobileYearBtn) {
+            mobileYearBtn.addEventListener('click', () => {
+                revealMobileUtilities();
+                if (!getBoundedCacheEntry(yearBandCache, yearBandCacheOrder, currentCity)) {
+                    fetchYearBandData(currentCity).then(() => drawYearBand());
+                }
+                showYearBand();
+                scheduleMobileUtilitiesHide(1800);
+            });
+        }
+
+        const mobileUnitBtn = document.getElementById('mobileUnitBtn');
+        if (mobileUnitBtn) {
+            mobileUnitBtn.addEventListener('click', () => {
+                document.getElementById('unitBtn').click();
+                revealMobileUtilities();
+                scheduleMobileUtilitiesHide(1800);
+            });
+        }
 
         /* // Handle similar capitals button — commented out for now
         const similarCache = {};
@@ -5311,12 +5817,110 @@
             moveDirSmooth = 0;
         });
 
-        // Touch device detection
-        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-
-        // Sky tooltip on mousemove (desktop only - disabled on touch to allow tap navigation)
+        // Sky tooltip on mousemove (desktop) / touch inspect (mobile)
         const skyRibbon = document.getElementById('skyRibbon');
         const skyTooltip = document.getElementById('skyTooltip');
+        const touchTooltipTimers = new WeakMap();
+
+        function getRibbonTFromClientX(clientX) {
+            const rect = skyRibbon.getBoundingClientRect();
+            if (!rect.width) return null;
+            return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        }
+
+        function clearTouchTooltip(tooltipEl) {
+            const timers = touchTooltipTimers.get(tooltipEl);
+            if (timers) {
+                clearTimeout(timers.fadeTimer);
+                clearTimeout(timers.hideTimer);
+                touchTooltipTimers.delete(tooltipEl);
+            }
+            tooltipEl.classList.remove('touch-visible');
+            tooltipEl.style.display = 'none';
+        }
+
+        function showTouchTooltip(tooltipEl, html, clientX, clientY) {
+            if (!tooltipEl) return;
+            const timers = touchTooltipTimers.get(tooltipEl);
+            if (timers) {
+                clearTimeout(timers.fadeTimer);
+                clearTimeout(timers.hideTimer);
+            }
+
+            const clampedX = Math.max(26, Math.min(window.innerWidth - 26, clientX));
+            const clampedY = Math.max(36, clientY - 16);
+
+            tooltipEl.innerHTML = html;
+            tooltipEl.style.left = `${clampedX}px`;
+            tooltipEl.style.top = `${clampedY}px`;
+            tooltipEl.style.display = 'block';
+            tooltipEl.classList.remove('touch-visible');
+            requestAnimationFrame(() => tooltipEl.classList.add('touch-visible'));
+
+            const fadeTimer = setTimeout(() => {
+                tooltipEl.classList.remove('touch-visible');
+            }, 900);
+            const hideTimer = setTimeout(() => {
+                tooltipEl.style.display = 'none';
+            }, 1350);
+            touchTooltipTimers.set(tooltipEl, { fadeTimer, hideTimer });
+        }
+
+        function buildTempTooltipHtml(t) {
+            const displayHours = displayEndHour - displayStartHour;
+            const hour = Math.round(displayStartHour + t * displayHours);
+            const hourStr = `${hour}h`;
+            const tempNorm = interpolateDataSmooth(weatherData.temperature, t, true);
+            const tempCelsius = tempNorm * 60 - 25;
+            const tempColor = getTempColor(tempNorm);
+            const windSpeedKmh = weatherData.windSpeedRaw ? interpolateData(weatherData.windSpeedRaw, t) : 0;
+            let tempInfo = `<span style="color: rgb(${tempColor.r}, ${tempColor.g}, ${tempColor.b})">${displayTemp(tempCelsius)}${tempUnit()}</span>`;
+            if (windSpeedKmh >= 20) {
+                tempInfo += ` | ${Math.round(windSpeedKmh)} km/h wind`;
+            }
+            return `<div class="tooltip-hour">${hourStr}</div><div class="tooltip-value">${tempInfo}</div>`;
+        }
+
+        function buildSkyTooltipHtml(t) {
+            const displayHours = displayEndHour - displayStartHour;
+            const hour = Math.round(displayStartHour + t * displayHours);
+            const hourStr = `${hour}h`;
+            const cloudValue = interpolateData(weatherData.clouds, t);
+            const cloudPercent = Math.round(cloudValue * 10) * 10;
+            const precipMm = interpolateData(weatherData.precipMm, t);
+            const snowCm = weatherData.snowCm ? interpolateData(weatherData.snowCm, t) : 0;
+            let cloudText;
+            let cloudColor;
+            if (cloudPercent < 20) {
+                cloudText = 'clear sky';
+                cloudColor = 'rgb(100, 180, 235)';
+            } else {
+                const rainValue = interpolateData(weatherData.rain, t);
+                const baseGray = Math.round(230 - cloudValue * 30 - rainValue * 40);
+                cloudText = `${cloudPercent}% clouds`;
+                cloudColor = `rgb(${baseGray}, ${baseGray}, ${baseGray})`;
+            }
+
+            let weatherInfo = `<span style="color: ${cloudColor}">${cloudText}</span>`;
+            if (snowCm > 0.1) {
+                weatherInfo += ` | <span style="color: rgb(255, 255, 255)">${snowCm.toFixed(1)}cm snow</span>`;
+            } else if (precipMm > 0.1) {
+                weatherInfo += ` | <span style="color: rgb(100, 180, 235)">${precipMm.toFixed(1)}mm rain</span>`;
+            }
+
+            const currentHour = displayStartHour + t * (displayEndHour - displayStartHour);
+            if (Math.abs(currentHour - weatherData.sunriseHour) <= 1) {
+                const sunriseMinutes = Math.round((weatherData.sunriseHour % 1) * 60);
+                const sunriseTimeStr = `${Math.floor(weatherData.sunriseHour)}h${sunriseMinutes.toString().padStart(2, '0')}`;
+                weatherInfo += ` | <span style="color: rgb(242, 182, 112)">sunrise ${sunriseTimeStr}</span>`;
+            } else if (Math.abs(currentHour - weatherData.sunsetHour) <= 1) {
+                const sunsetMinutes = Math.round((weatherData.sunsetHour % 1) * 60);
+                const sunsetTimeStr = `${Math.floor(weatherData.sunsetHour)}h${sunsetMinutes.toString().padStart(2, '0')}`;
+                weatherInfo += ` | <span style="color: rgb(241, 154, 120)">sunset ${sunsetTimeStr}</span>`;
+            }
+
+            return `<div class="tooltip-hour">${hourStr}</div><div class="tooltip-value">${weatherInfo}</div>`;
+        }
 
         if (!isTouchDevice) {
             skyRibbon.addEventListener('mousemove', (e) => {
@@ -5457,54 +6061,96 @@
         if (isTouchDevice) {
             document.body.classList.add('touch-device');
 
+            // Collapse mobile utilities when tapping outside the utility row
+            document.addEventListener('touchstart', (e) => {
+                if (e.target.closest('#mobileUtilityRow')) return;
+                collapseMobileUtilities();
+            }, { passive: true });
+
             // Show tap indicator briefly, then hide it
             const swipeIndicator = document.getElementById('swipeIndicator');
             setTimeout(() => {
                 swipeIndicator.classList.add('hidden');
             }, 3000);
 
-            // Tap left/right side of sky ribbon to navigate days
-            const skyRibbonTouch = document.getElementById('skyRibbon');
-            let touchStartX = 0, touchStartY = 0;
+            // Bind touch inspect + swipe gestures to sky ribbon and temp overlay
+            const bindTouchInspector = (target, tooltipEl, buildHtml) => {
+                if (!target) return;
 
-            skyRibbonTouch.addEventListener('touchstart', (e) => {
-                touchStartX = e.changedTouches[0].screenX;
-                touchStartY = e.changedTouches[0].screenY;
-            }, { passive: true });
+                let touchStartX = 0;
+                let touchStartY = 0;
+                let trackingTouch = false;
+                let swipeReady = false;
+                let inspectStarted = false;
 
-            skyRibbonTouch.addEventListener('touchend', async (e) => {
-                const touchEndX = e.changedTouches[0].screenX;
-                const touchEndY = e.changedTouches[0].screenY;
-                const deltaX = Math.abs(touchEndX - touchStartX);
-                const deltaY = Math.abs(touchEndY - touchStartY);
+                target.addEventListener('touchstart', (e) => {
+                    if (e.touches.length !== 1) return;
+                    const touch = e.touches[0];
+                    touchStartX = touch.clientX;
+                    touchStartY = touch.clientY;
+                    trackingTouch = true;
+                    swipeReady = false;
+                    inspectStarted = false;
+                }, { passive: true });
 
-                // Only trigger on tap (minimal movement), not drag/scroll
-                if (deltaX > 20 || deltaY > 20) return;
+                target.addEventListener('touchmove', (e) => {
+                    if (!trackingTouch || e.touches.length !== 1) return;
+                    const touch = e.touches[0];
+                    const dx = touch.clientX - touchStartX;
+                    const dy = touch.clientY - touchStartY;
+                    const absX = Math.abs(dx);
+                    const absY = Math.abs(dy);
 
-                const rect = skyRibbonTouch.getBoundingClientRect();
-                const tapX = touchEndX - rect.left;
-                const ribbonWidth = rect.width;
-
-                // Tap on left third = previous day, right third = next day
-                if (tapX < ribbonWidth * 0.33) {
-                    currentDayOffset--;
-                    await refreshView();
-                    // Prefetch more past days if approaching the boundary
-                    if (currentDayOffset <= prefetchedPastBoundary + 3) {
-                        prefetchPastDays(currentCity, prefetchedPastBoundary);
+                    if (absX > 52 && absX > absY * 1.35) {
+                        swipeReady = true;
+                        inspectStarted = false;
+                        clearTouchTooltip(tooltipEl);
+                        return;
                     }
-                } else if (tapX > ribbonWidth * 0.67) {
-                    if (currentDayOffset < maxFutureOffset) {
-                        currentDayOffset++;
-                        await refreshView();
-                        if (currentDayOffset >= maxFutureOffset) {
-                            showForecastLimitMessage();
+
+                    if ((absX > 8 || absY > 8) && (absY <= 48 || absX >= absY)) {
+                        inspectStarted = true;
+                        const t = getRibbonTFromClientX(touch.clientX);
+                        if (t !== null && weatherData.temperature?.length) {
+                            showTouchTooltip(tooltipEl, buildHtml(t), touch.clientX, touch.clientY);
                         }
-                    } else {
-                        showForecastLimitMessage();
                     }
-                }
-            }, { passive: true });
+                }, { passive: true });
+
+                target.addEventListener('touchend', async (e) => {
+                    if (!trackingTouch) return;
+                    trackingTouch = false;
+
+                    const touch = e.changedTouches[0];
+                    const dx = touch.clientX - touchStartX;
+                    const dy = touch.clientY - touchStartY;
+                    const absX = Math.abs(dx);
+                    const absY = Math.abs(dy);
+
+                    if (swipeReady && absX > 72 && absX > absY * 1.2) {
+                        clearTouchTooltip(tooltipEl);
+                        await changeDayBy(dx < 0 ? 1 : -1);
+                        return;
+                    }
+
+                    if (!inspectStarted || (absX <= 18 && absY <= 18)) {
+                        const t = getRibbonTFromClientX(touch.clientX);
+                        if (t !== null && weatherData.temperature?.length) {
+                            showTouchTooltip(tooltipEl, buildHtml(t), touch.clientX, touch.clientY);
+                        }
+                    }
+                }, { passive: true });
+
+                target.addEventListener('touchcancel', () => {
+                    trackingTouch = false;
+                    swipeReady = false;
+                    inspectStarted = false;
+                    clearTouchTooltip(tooltipEl);
+                }, { passive: true });
+            };
+
+            bindTouchInspector(skyRibbon, skyTooltip, buildSkyTooltipHtml);
+            bindTouchInspector(tempOverlay, tempTooltip, buildTempTooltipHtml);
         } else {
             // Hide tap indicator on non-touch devices
             const swipeIndicator = document.getElementById('swipeIndicator');
@@ -5518,9 +6164,8 @@
             });
         }
 
-        // Initialize year band click/hover interaction
+        // Initialize year band click interaction
         initYearBandInteraction();
-        initYearBandHover();
 
         // Subtitle list — embedded for reliability, can be overridden by subtitles.txt
         const subtitleList = [
