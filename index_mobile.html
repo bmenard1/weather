@@ -115,6 +115,13 @@
             touch-action: pan-y;
         }
 
+        .mobile-utility-row,
+        .utility-toggle,
+        .mobile-utility-panel,
+        .mobile-utility-btn {
+            display: none;
+        }
+
         .touch-device .temp-tooltip,
         .touch-device .sky-tooltip {
             opacity: 0;
@@ -988,7 +995,8 @@
 
         body.touch-device .date-nav,
         body.touch-device .location-section,
-        body.touch-device .day-arrow {
+        body.touch-device .day-arrow,
+        body.touch-device .mobile-utility-row {
             position: static;
             transform: none;
         }
@@ -1010,10 +1018,9 @@
         body.touch-device .city-label-wrapper,
         body.touch-device .day-label-wrapper {
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 0;
             width: 100%;
         }
 
@@ -1062,6 +1069,62 @@
             display: none;
         }
 
+        body.touch-device .mobile-utility-row {
+            grid-area: utility;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 34px;
+        }
+
+        body.touch-device .utility-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 54px;
+            height: 30px;
+            padding: 0 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(210, 220, 240, 0.66);
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: lowercase;
+            cursor: pointer;
+        }
+
+        body.touch-device .mobile-utility-panel {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        body.touch-device .mobile-utility-panel.visible {
+            display: flex;
+        }
+
+        body.touch-device .mobile-utility-row.expanded .utility-toggle {
+            display: none;
+        }
+
+        body.touch-device .mobile-utility-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 30px;
+            padding: 4px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            color: rgba(220, 228, 242, 0.86);
+            font-size: 0.68rem;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+        }
+
         body.touch-device .random-btn,
         body.touch-device .week-btn {
             position: static;
@@ -1105,17 +1168,15 @@
         }
 
         body.touch-device .year-band-container {
-            margin-top: 0;
-            height: 0;
+            margin-top: 16px;
+            height: 16px;
             opacity: 0;
             pointer-events: none;
             overflow: hidden;
-            transition: opacity 1.2s ease, height 0.3s ease, margin-top 0.3s ease;
+            transition: opacity 0.9s ease;
         }
 
         body.touch-device .year-band-container.visible {
-            margin-top: 16px;
-            height: 16px;
             opacity: 1;
             pointer-events: auto;
         }
@@ -1154,13 +1215,21 @@
             }
 
             body.touch-device .year-band-container {
-                margin-top: 0;
-                height: 0;
+                margin-top: 10px;
+                height: 14px;
             }
 
             body.touch-device .year-band-container.visible {
-                margin-top: 10px;
-                height: 14px;
+                opacity: 1;
+            }
+
+            body.touch-device .mobile-utility-panel {
+                gap: 6px;
+            }
+
+            body.touch-device .mobile-utility-btn,
+            body.touch-device .utility-toggle {
+                font-size: 0.64rem;
             }
         }
 
@@ -1206,6 +1275,15 @@
                     <div class="day-label-wrapper">
                         <button type="button" class="day-label" id="dayLabel" aria-label="Jump to today">Today</button>
                         <button type="button" class="week-btn" id="weekBtn" aria-label="Show week preview">week</button>
+                    </div>
+                </div>
+                <div class="mobile-utility-row" id="mobileUtilityRow">
+                    <button type="button" class="utility-toggle" id="utilityToggle" aria-label="Show more controls">more</button>
+                    <div class="mobile-utility-panel" id="mobileUtilityPanel">
+                        <button type="button" class="mobile-utility-btn" id="mobileRandomBtn" aria-label="Pick random city">random</button>
+                        <button type="button" class="mobile-utility-btn" id="mobileWeekBtn" aria-label="Show week preview">week</button>
+                        <button type="button" class="mobile-utility-btn" id="mobileYearBtn" aria-label="Show year band">year</button>
+                        <button type="button" class="mobile-utility-btn" id="mobileUnitBtn" aria-label="Toggle temperature unit">°C</button>
                     </div>
                 </div>
             </div>
@@ -2254,6 +2332,7 @@
         // Current weather data
         let fullWeatherData = null;
         let weatherData = {};
+        let mobileUtilityHideTimer = null;
 
         // Helper to get date string for a given offset from today in city's timezone
         function getDateForOffset(city, dayOffset) {
@@ -4523,7 +4602,10 @@
                 newLabel.setAttribute('aria-label', 'Choose city');
                 newLabel.textContent = name;
                 wrapper.replaceWith(newLabel);
-                newLabel.addEventListener('click', startCityEdit);
+                newLabel.addEventListener('click', (e) => {
+                    if (isTouchDevice) collapseMobileUtilities();
+                    startCityEdit(e);
+                });
             }
 
             async function finishEdit() {
@@ -4582,13 +4664,7 @@
         }
 
         document.getElementById('cityLabel').addEventListener('click', (e) => {
-            if (isTouchDevice) {
-                const randomBtn = document.getElementById('randomBtn');
-                if (randomBtn && !randomBtn.classList.contains('shown')) {
-                    showAuxButton(randomBtn);
-                    return;
-                }
-            }
+            if (isTouchDevice) collapseMobileUtilities();
             startCityEdit(e);
         });
 
@@ -4666,15 +4742,47 @@
             auxButtonTimers.set(btnEl, timer);
         }
 
-        function touchRevealDayExtras() {
-            showAuxButton(document.getElementById('weekBtn'));
-            showAuxButton(document.getElementById('unitBtn'));
-            showYearBand();
-            scheduleYearBandFadeOut();
+        function setUtilityButtonsText() {
+            const unitText = useFahrenheit ? '°F' : '°C';
+            document.getElementById('unitBtn').textContent = unitText;
+            const mobileUnitBtn = document.getElementById('mobileUnitBtn');
+            if (mobileUnitBtn) mobileUnitBtn.textContent = unitText;
+        }
+
+        function collapseMobileUtilities() {
+            if (!isTouchDevice) return;
+            const row = document.getElementById('mobileUtilityRow');
+            const panel = document.getElementById('mobileUtilityPanel');
+            if (mobileUtilityHideTimer) {
+                clearTimeout(mobileUtilityHideTimer);
+                mobileUtilityHideTimer = null;
+            }
+            if (row) row.classList.remove('expanded');
+            if (panel) panel.classList.remove('visible');
+        }
+
+        function scheduleMobileUtilitiesHide(delay = 3200) {
+            if (!isTouchDevice) return;
+            if (mobileUtilityHideTimer) clearTimeout(mobileUtilityHideTimer);
+            mobileUtilityHideTimer = setTimeout(() => {
+                mobileUtilityHideTimer = null;
+                collapseMobileUtilities();
+            }, delay);
+        }
+
+        function revealMobileUtilities(delay = 3200) {
+            if (!isTouchDevice) return;
+            const row = document.getElementById('mobileUtilityRow');
+            const panel = document.getElementById('mobileUtilityPanel');
+            if (!row || !panel) return;
+            row.classList.add('expanded');
+            panel.classList.add('visible');
+            scheduleMobileUtilitiesHide(delay);
         }
 
         async function changeDayBy(delta) {
             if (delta === 0) return;
+            if (isTouchDevice) collapseMobileUtilities();
 
             if (delta < 0) {
                 currentDayOffset--;
@@ -4707,15 +4815,7 @@
 
         // Click on day label to go to today
         document.getElementById('dayLabel').addEventListener('click', async () => {
-            if (isTouchDevice) {
-                const weekBtn = document.getElementById('weekBtn');
-                const unitBtn = document.getElementById('unitBtn');
-                if ((weekBtn && !weekBtn.classList.contains('shown')) ||
-                    (unitBtn && !unitBtn.classList.contains('shown'))) {
-                    touchRevealDayExtras();
-                    return;
-                }
-            }
+            if (isTouchDevice) collapseMobileUtilities();
             if (currentDayOffset !== 0) {
                 currentDayOffset = 0;
                 await refreshView();
@@ -4747,19 +4847,19 @@
         })();
 
         // Handle unit toggle button
-        document.getElementById('unitBtn').textContent = useFahrenheit ? '°F' : '°C';
+        setUtilityButtonsText();
         document.getElementById('unitBtn').addEventListener('click', () => {
             useFahrenheit = !useFahrenheit;
             localStorage.setItem('useFahrenheit', useFahrenheit);
-            document.getElementById('unitBtn').textContent = useFahrenheit ? '°F' : '°C';
+            setUtilityButtonsText();
             // Redraw only temp-sensitive elements (not time marker)
             drawTemperatureCurve();
             drawYearBand();
-            if (isTouchDevice) showAuxButton(document.getElementById('unitBtn'));
+            if (isTouchDevice) scheduleMobileUtilitiesHide();
         });
 
         // Handle random capital button
-        document.getElementById('randomBtn').addEventListener('click', async () => {
+        async function pickRandomCapital() {
             currentExtraDots = null; // Clear similar-city dots
             // Pick a random capital different from current
             let randomCapital;
@@ -4784,7 +4884,9 @@
 
             // Show world map overlay with the chosen city
             showWorldMap(randomCapital.lat, randomCapital.lon);
-        });
+        }
+
+        document.getElementById('randomBtn').addEventListener('click', pickRandomCapital);
 
         // Week view: show 5 stacked temperature curves
         let weekViewTimer = null;
@@ -4962,6 +5064,54 @@
         }
 
         document.getElementById('weekBtn').addEventListener('click', showWeekView);
+        const utilityToggle = document.getElementById('utilityToggle');
+        if (utilityToggle) {
+            utilityToggle.addEventListener('click', () => {
+                const panel = document.getElementById('mobileUtilityPanel');
+                if (panel && panel.classList.contains('visible')) {
+                    collapseMobileUtilities();
+                } else {
+                    revealMobileUtilities();
+                }
+            });
+        }
+
+        const mobileRandomBtn = document.getElementById('mobileRandomBtn');
+        if (mobileRandomBtn) {
+            mobileRandomBtn.addEventListener('click', async () => {
+                revealMobileUtilities();
+                await pickRandomCapital();
+                scheduleMobileUtilitiesHide(1800);
+            });
+        }
+
+        const mobileWeekBtn = document.getElementById('mobileWeekBtn');
+        if (mobileWeekBtn) {
+            mobileWeekBtn.addEventListener('click', () => {
+                revealMobileUtilities();
+                showWeekView();
+                scheduleMobileUtilitiesHide(1800);
+            });
+        }
+
+        const mobileYearBtn = document.getElementById('mobileYearBtn');
+        if (mobileYearBtn) {
+            mobileYearBtn.addEventListener('click', () => {
+                revealMobileUtilities();
+                showYearBand();
+                scheduleYearBandFadeOut();
+                scheduleMobileUtilitiesHide(1800);
+            });
+        }
+
+        const mobileUnitBtn = document.getElementById('mobileUnitBtn');
+        if (mobileUnitBtn) {
+            mobileUnitBtn.addEventListener('click', () => {
+                document.getElementById('unitBtn').click();
+                revealMobileUtilities();
+                scheduleMobileUtilitiesHide(1800);
+            });
+        }
 
         /* // Handle similar capitals button — commented out for now
         const similarCache = {};
@@ -5824,6 +5974,11 @@
         if (isTouchDevice) {
             document.body.classList.add('touch-device');
 
+            document.addEventListener('touchstart', (e) => {
+                if (e.target.closest('#mobileUtilityRow')) return;
+                collapseMobileUtilities();
+            }, { passive: true });
+
             // Show tap indicator briefly, then hide it
             const swipeIndicator = document.getElementById('swipeIndicator');
             setTimeout(() => {
@@ -5837,6 +5992,7 @@
                 let touchStartY = 0;
                 let trackingTouch = false;
                 let swipeReady = false;
+                let inspectStarted = false;
 
                 target.addEventListener('touchstart', (e) => {
                     if (e.touches.length !== 1) return;
@@ -5845,11 +6001,7 @@
                     touchStartY = touch.clientY;
                     trackingTouch = true;
                     swipeReady = false;
-
-                    const t = getRibbonTFromClientX(touch.clientX);
-                    if (t !== null && weatherData.temperature?.length) {
-                        showTouchTooltip(tooltipEl, buildHtml(t), touch.clientX, touch.clientY);
-                    }
+                    inspectStarted = false;
                 }, { passive: true });
 
                 target.addEventListener('touchmove', (e) => {
@@ -5862,11 +6014,13 @@
 
                     if (absX > 52 && absX > absY * 1.35) {
                         swipeReady = true;
+                        inspectStarted = false;
                         clearTouchTooltip(tooltipEl);
                         return;
                     }
 
-                    if (absY <= 48 || absX >= absY) {
+                    if ((absX > 8 || absY > 8) && (absY <= 48 || absX >= absY)) {
+                        inspectStarted = true;
                         const t = getRibbonTFromClientX(touch.clientX);
                         if (t !== null && weatherData.temperature?.length) {
                             showTouchTooltip(tooltipEl, buildHtml(t), touch.clientX, touch.clientY);
@@ -5890,15 +6044,18 @@
                         return;
                     }
 
-                    const t = getRibbonTFromClientX(touch.clientX);
-                    if (t !== null && weatherData.temperature?.length) {
-                        showTouchTooltip(tooltipEl, buildHtml(t), touch.clientX, touch.clientY);
+                    if (!inspectStarted || (absX <= 18 && absY <= 18)) {
+                        const t = getRibbonTFromClientX(touch.clientX);
+                        if (t !== null && weatherData.temperature?.length) {
+                            showTouchTooltip(tooltipEl, buildHtml(t), touch.clientX, touch.clientY);
+                        }
                     }
                 }, { passive: true });
 
                 target.addEventListener('touchcancel', () => {
                     trackingTouch = false;
                     swipeReady = false;
+                    inspectStarted = false;
                     clearTouchTooltip(tooltipEl);
                 }, { passive: true });
             };
