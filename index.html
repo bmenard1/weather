@@ -55,13 +55,14 @@
             padding-bottom: 50px;
         }
 
-        #tempCurveCanvas, #windCanvas {
+        #tempCurveCanvas, #precipCanvas, #windCanvas {
             position: absolute;
             top: 0;
             left: 0;
             pointer-events: none;
         }
         #tempCurveCanvas { z-index: 0; }
+        #precipCanvas { z-index: 5; }
         #windCanvas { z-index: 1; }
         #worldMapCanvas {
             display: block;
@@ -1244,6 +1245,7 @@
             <div class="loading-curve" id="loadingCurve"></div>
         </div>
         <canvas id="tempCurveCanvas"></canvas>
+        <canvas id="precipCanvas"></canvas>
         <canvas id="windCanvas"></canvas>
         <canvas id="weekViewCanvas"></canvas>
         <div id="tempCurveOverlay"></div>
@@ -1673,6 +1675,7 @@
         let currentExtraDots = null; // Array of {lat, lon, color} for similar cities
 
         // Heatmap overlay state
+        const HEATMAP_ENABLED = false; // master toggle: world-map temperature heatmap (off for now, code retained)
         let heatmapGridCache = {};     // dateStr → 2D array [row][col] of tempC
         const heatmapGridCacheOrder = [];
         let currentHeatmapGrid = null; // currently loaded grid data
@@ -1722,6 +1725,7 @@
 
         // Fetch temperature grid for heatmap overlay
         async function fetchHeatmapGrid(dateStr) {
+            if (!HEATMAP_ENABLED) return null;
             const cachedGrid = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
             if (cachedGrid) return cachedGrid;
 
@@ -1948,7 +1952,7 @@
         // Draw country outlines + extra dots (background layer, no main city dot)
         function drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData, heatmapAlpha) {
             // Draw heatmap underneath if active
-            if (heatmapGridData && (heatmapAlpha === undefined || heatmapAlpha > 0.01)) {
+            if (HEATMAP_ENABLED && heatmapGridData && (heatmapAlpha === undefined || heatmapAlpha > 0.01)) {
                 ctx.save();
                 ctx.globalAlpha = heatmapAlpha !== undefined ? heatmapAlpha : 1;
                 drawHeatmapOverlay(ctx, mapBounds, polygons, heatmapGridData);
@@ -2542,11 +2546,14 @@
             return { sunrise, sunset };
         }
 
-        // Get display range: 2h before sunrise to 2h after sunset
+        // Get display range: symmetric padding around sunrise/sunset
         function getDisplayRange(data) {
-            const { sunrise, sunset } = findSunriseSunset(data.daylight);
-            const startHour = Math.max(0, sunrise - 2);
-            const endHour = Math.min(23, sunset + 2);
+            const sr = data.sunriseHour || 6;
+            const ss = data.sunsetHour || 18;
+            // Use same padding on both sides so orange regions have equal width
+            const padding = 2;
+            const startHour = Math.max(0, Math.floor(sr - padding));
+            const endHour = Math.min(23, Math.ceil(ss + padding));
             return { startHour, endHour };
         }
 
@@ -2944,6 +2951,22 @@
             return t * t * (3 - 2 * t);
         }
 
+        // Analytical daylight value — perfectly symmetric dawn/dusk transitions
+        function getDaylightAnalytical(hour, sunriseHour, sunsetHour) {
+            const tr = 1.2; // transition duration in hours (must match normalization)
+            if (hour < sunriseHour - tr) return 0;
+            if (hour < sunriseHour + tr) {
+                const t = (hour - (sunriseHour - tr)) / (2 * tr);
+                return 0.5 - 0.5 * Math.cos(t * Math.PI);
+            }
+            if (hour < sunsetHour - tr) return 1;
+            if (hour < sunsetHour + tr) {
+                const t = (hour - (sunsetHour - tr)) / (2 * tr);
+                return 0.5 + 0.5 * Math.cos(t * Math.PI);
+            }
+            return 0;
+        }
+
         // Basic interpolation for most data
         function interpolateData(data, t) {
             const len = data.length;
@@ -3127,109 +3150,172 @@
             const skyHeight = fullBaseHeight;
 
             // Cloud base position - clouds start at top and extend down
-            const cloudBottomY = skyHeight * 0.5; // Bottom edge of cloud layer
+            const visibleSkyHeight = skyHeight - cropAmount;
+            const cloudBottomY = cropAmount + visibleSkyHeight * 0.33; // Cloud zone = top 1/3 of visible sky
             // Sky gradient fades out within the shorter sky extension area
             const skyFadeEndY = fullBaseHeight + skyExtensionHeight;
 
-            // First, draw the sky color that extends DOWN from the cloud bottom
-            // Sky fades out within skyFadeEndY, not the full height
+            // Analytical daylight for symmetric sunrise/sunset rendering
+            const srHour = weatherData.sunriseHour || 6;
+            const ssHour = weatherData.sunsetHour || 18;
+            const dspHours = displayEndHour - displayStartHour;
+            function tToHour(t) { return displayStartHour + t * dspHours; }
+
+            // Flat sky color fill — no vertical gradient
+            const overcastGrey = { r: 180, g: 185, b: 195 };
             for (let x = 0; x < width; x++) {
                 const t = x / width;
-                const dayValue = interpolateData(weatherData.daylight, t);
+                const dayValue = getDaylightAnalytical(tToHour(t), srHour, ssHour);
                 const cloudValue = interpolateData(weatherData.clouds, t);
                 const skyColors = getSkyColor(dayValue, cloudValue);
 
-                // Calculate sky color blended with grey based on cloud coverage
-                // Use cosine interpolation for smooth brightness transitions
-                const greyColor = { r: 180, g: 185, b: 195 };
-                const cloudBlend = 0.5 * (1 - Math.cos(cloudValue * Math.PI));
-                const skyColor = lerpColor(skyColors.bottom, greyColor, cloudBlend);
+                // Sky turns gray when cloud coverage > 30%
+                const cloudBlend = smoothstep(0.3, 0.8, cloudValue);
+                const skyColor = lerpColor(skyColors.bottom, overcastGrey, cloudBlend * 0.7);
 
-                // Create gradient from cloud bottom down, fading to transparent with cosine decay
-                const gradient = ctx.createLinearGradient(x, cloudBottomY, x, skyFadeEndY);
-                const numStops = 10;
-                for (let i = 0; i <= numStops; i++) {
-                    const t = i / numStops;
-                    // Cosine decay: starts at 1, smoothly decays to 0
-                    const alpha = 0.5 * (1 + Math.cos(t * Math.PI));
-                    gradient.addColorStop(t, colorToString(skyColor, alpha));
+                // Solid top 60%, cosine alpha fadeout in bottom 40% (transparent → body gradient shows through)
+                const totalH = skyFadeEndY - cropAmount;
+                const grad = ctx.createLinearGradient(x, cropAmount, x, skyFadeEndY);
+                grad.addColorStop(0, colorToString(skyColor, 1));
+                grad.addColorStop(0.6, colorToString(skyColor, 1));
+                const fadeSteps = 10;
+                for (let s = 1; s <= fadeSteps; s++) {
+                    const frac = s / fadeSteps;
+                    const alpha = 0.5 + 0.5 * Math.cos(frac * Math.PI); // 1→0 cosine
+                    grad.addColorStop(0.6 + 0.4 * frac, colorToString(skyColor, alpha));
                 }
-
-                ctx.fillStyle = gradient;
-                ctx.fillRect(x, cloudBottomY, 1.5, skyFadeEndY - cloudBottomY);
+                ctx.fillStyle = grad;
+                ctx.fillRect(x, cropAmount, 1.5, totalH);
             }
 
-            // Draw cloud layer at the TOP of the ribbon
-            for (let x = 0; x < width; x++) {
-                const t = x / width;
+            // --- Cloud layer: two-pass rendering for organic shapes ---
+            const cloudShiftUp = visibleSkyHeight * 0.3;
+            const cloudAnchorY = cropAmount + 5 - cloudShiftUp;
+            const cloudMaxDrop = visibleSkyHeight * 0.28;
+            const cloudOverflow = visibleSkyHeight * 0.12; // allow organic overflow below 1/3 line
+
+            // Helper: compute cloud color from weather values
+            function getCloudColor(dayValue, cloudValue, rainValue, snowValue) {
+                // Clouds are white during daytime, darker when rain/snow present, dim at night
+                // Fast dawn transition so clouds don't darken the brightening sky
+                const dayBlend = smoothstep(0.05, 0.30, dayValue);
+                const precipIntensity = Math.max(rainValue, snowValue || 0);
+                // Strong darkening for rain/snow: clouds become visibly gray
+                // 1mm→216 gray, 2mm→148 gray, 3mm+→125 gray
+                const precipDarken = smoothstep(0.02, 0.25, precipIntensity) * 130;
+                const dayGray = 255 - precipDarken;
+                const baseGray = 60 + (dayGray - 60) * dayBlend;
+                // Dawn/dusk tint
+                const tintDist = Math.abs(dayValue - 0.35) / 0.2;
+                const tintStr = Math.max(0, 1 - tintDist * tintDist);
+                return {
+                    r: Math.min(255, baseGray + 40 * tintStr) | 0,
+                    g: Math.min(255, baseGray + 15 * tintStr) | 0,
+                    b: Math.max(0, baseGray - 10 * tintStr) | 0
+                };
+            }
+
+            // Pass 1: Main cloud mass — dense blobs in upper zone
+            const cloudBlobs = [];
+            const numSeeds = 180;
+            for (let i = 0; i < numSeeds; i++) {
+                const seedX = noise(i, 7, 42);
+                const blobX = seedX * width;
+                const t = blobX / width;
                 const cloudValue = interpolateData(weatherData.clouds, t);
-                const rainValue = interpolateData(weatherData.rain, t);
-                const dayValue = interpolateData(weatherData.daylight, t);
-
-                // Use cosine interpolation for smooth cloud coverage transitions
+                if (cloudValue < 0.05) continue;
                 const cloudSmooth = 0.5 * (1 - Math.cos(cloudValue * Math.PI));
-
-                // Calculate cloud color based on time of day using smooth transitions
-                // Night clouds (dark), twilight clouds (medium), day clouds (bright)
-                const nightGray = 60 - cloudSmooth * 20 - rainValue * 20;
-                const dayGray = 230 - cloudSmooth * 30 - rainValue * 40;
-                // Smooth transition using smoothstep for continuous blending
-                const dayBlend = smoothstep(0.15, 0.55, dayValue);
-                const baseGray = nightGray + (dayGray - nightGray) * dayBlend;
-
-                // Add color tint for dawn/dusk using smooth gaussian-like curve
-                let r = baseGray, g = baseGray, b = baseGray;
-                // Peak tint at dayValue=0.35, smooth falloff in both directions
-                const tintCenter = 0.35;
-                const tintWidth = 0.2;
-                const tintDist = Math.abs(dayValue - tintCenter) / tintWidth;
-                const tintStrength = Math.max(0, 1 - tintDist * tintDist); // Smooth quadratic falloff
-                r = Math.min(255, baseGray + 40 * tintStrength);
-                g = Math.min(255, baseGray + 15 * tintStrength);
-                b = Math.max(0, baseGray - 10 * tintStrength);
-
-                // Fill the top area with cloud color (only visible when there are clouds)
-                // Use cosine-smoothed alpha for gradual transitions
-                const alpha = cloudSmooth;
-
-                // Skip drawing if no clouds (fully transparent)
-                if (alpha < 0.01) continue;
-
-                const gradient = ctx.createLinearGradient(x, 0, x, cloudBottomY + 20);
-                gradient.addColorStop(0, `rgba(${r}, ${g}, ${b + 5}, ${alpha})`);
-                gradient.addColorStop(0.6, `rgba(${r}, ${g}, ${b + 5}, ${alpha * 0.95})`);
-                gradient.addColorStop(0.85, `rgba(${r - 5}, ${g - 3}, ${b}, ${alpha * 0.7})`);
-                gradient.addColorStop(1, `rgba(${r - 10}, ${g - 5}, ${b - 5}, 0)`);
-
-                ctx.fillStyle = gradient;
-                ctx.fillRect(x, 0, 1.5, cloudBottomY + 20);
-
-                // Add cloud texture/puffs at the bottom edge of the cloud layer
-                const puffFreq = 0.02;
-                for (let i = 0; i < 6; i++) {
-                    const puffX = x + noise(x * puffFreq, i) * 15;
-                    const puffY = cloudBottomY - 10 + noise(x, i) * 25;
-                    const puffSize = (12 + noise(x, i * 2) * 20) * cloudSmooth;
-
-                    if (puffSize > 3) {
-                        const puffAlpha = Math.min(0.9, cloudSmooth * 0.8);
-                        const puffGradient = ctx.createRadialGradient(puffX, puffY, 0, puffX, puffY, puffSize);
-                        puffGradient.addColorStop(0, `rgba(${r + 10}, ${g + 10}, ${b + 15}, ${puffAlpha})`);
-                        puffGradient.addColorStop(0.5, `rgba(${r}, ${g + 3}, ${b + 8}, ${puffAlpha * 0.7})`);
-                        puffGradient.addColorStop(1, `rgba(${r - 10}, ${g - 5}, ${b}, 0)`);
-
-                        ctx.fillStyle = puffGradient;
-                        ctx.beginPath();
-                        ctx.arc(puffX, puffY, puffSize, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                }
+                // Size: minimum floor so low-coverage clouds are still visible puffs
+                const sizeFactor = Math.max(0.45, 0.5 + cloudSmooth * 0.7);
+                const baseW = 25 + noise(i, 1, 13) * 55;
+                const blobW = baseW * sizeFactor;
+                const blobH = blobW * (0.55 + noise(i, 2, 77) * 0.25);
+                const dropAmount = noise(i, 3, 55) * cloudMaxDrop * Math.max(0.15, cloudSmooth);
+                const blobY = cloudAnchorY + dropAmount;
+                // Strong alpha at low coverage for visible white clouds on blue sky
+                const lowCoverageAlpha = (1 - smoothstep(0.0, 0.4, cloudValue)) * 0.7;
+                const blobAlpha = Math.min(1, cloudSmooth * (0.75 + noise(i, 4, 33) * 0.25) + lowCoverageAlpha);
+                if (blobAlpha < 0.05) continue;
+                cloudBlobs.push({ x: blobX, y: blobY, w: blobW, h: blobH, alpha: blobAlpha, t });
             }
+
+            // Pass 2: Underbelly puffs — smaller blobs along bottom edge for organic shape
+            const underbellyBlobs = [];
+            const numPuffs = 120;
+            for (let i = 0; i < numPuffs; i++) {
+                const seedX = noise(i + 200, 9, 61);
+                const blobX = seedX * width;
+                const t = blobX / width;
+                const cloudValue = interpolateData(weatherData.clouds, t);
+                if (cloudValue < 0.15) continue;
+                const cloudSmooth = 0.5 * (1 - Math.cos(cloudValue * Math.PI));
+                // Position these at and below the cloud base line
+                const baseY = cloudBottomY - 5 - cloudShiftUp + noise(i + 200, 5, 88) * cloudOverflow * cloudSmooth;
+                const puffW = 10 + noise(i + 200, 6, 44) * 25;
+                const puffH = puffW * (0.6 + noise(i + 200, 8, 99) * 0.3);
+                const puffAlpha = cloudSmooth * (0.5 + noise(i + 200, 7, 22) * 0.4);
+                if (puffAlpha < 0.05) continue;
+                underbellyBlobs.push({ x: blobX, y: baseY, w: puffW, h: puffH, alpha: puffAlpha, t });
+            }
+
+            // Draw cloud blobs on offscreen canvas, then stamp per-column with cloud coverage mask
+            // This prevents any horizontal spill of cloud blobs into clear sky
+            const allBlobs = [...cloudBlobs, ...underbellyBlobs];
+            const offCloud = document.createElement('canvas');
+            offCloud.width = canvas.width;
+            offCloud.height = canvas.height;
+            const offCtx = offCloud.getContext('2d');
+            offCtx.setTransform(2, 0, 0, 2, 0, 0);
+            offCtx.translate(0, -cropAmount);
+
+            for (const blob of allBlobs) {
+                const dayValue = getDaylightAnalytical(tToHour(blob.t), srHour, ssHour);
+                const cloudValue = interpolateData(weatherData.clouds, blob.t);
+                const rainValue = interpolateData(weatherData.rain, blob.t);
+                const snowValue = weatherData.snow ? interpolateData(weatherData.snow, blob.t) : 0;
+                const { r: cr, g: cg, b: cb } = getCloudColor(dayValue, cloudValue, rainValue, snowValue);
+
+                offCtx.save();
+                offCtx.translate(blob.x, blob.y);
+                offCtx.scale(blob.w / blob.h, 1);
+
+                // Boost white brightness when coverage < 60%
+                const whiteness = 1 - smoothstep(0.0, 0.6, cloudValue);
+                const wb = Math.round(whiteness * 50);
+                const ab = 1 + whiteness * 0.4;
+
+                const grad = offCtx.createRadialGradient(0, 0, 0, 0, 0, blob.h);
+                grad.addColorStop(0, `rgba(${Math.min(255, cr + 10 + wb)},${Math.min(255, cg + 10 + wb)},${Math.min(255, cb + 15 + wb)},${Math.min(1, blob.alpha * ab)})`);
+                grad.addColorStop(0.5, `rgba(${Math.min(255, cr + 5 + wb)},${Math.min(255, cg + 5 + wb)},${Math.min(255, cb + 10 + wb)},${Math.min(1, blob.alpha * 0.8 * ab)})`);
+                grad.addColorStop(0.75, `rgba(${Math.min(255, cr + wb)},${Math.min(255, cg + wb)},${Math.min(255, cb + 5 + wb)},${blob.alpha * 0.6})`);
+                grad.addColorStop(0.9, `rgba(${cr},${cg},${cb},${blob.alpha * 0.2})`);
+                grad.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+
+                offCtx.fillStyle = grad;
+                offCtx.beginPath();
+                offCtx.arc(0, 0, blob.h, 0, Math.PI * 2);
+                offCtx.fill();
+                offCtx.restore();
+            }
+
+            // Composite cloud layer onto main canvas, masked per-column by cloud coverage
+            ctx.save();
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            for (let px = 0; px < canvas.width; px += 2) {
+                const t = (px / 2) / width;
+                const cloudValue = interpolateData(weatherData.clouds, t);
+                const colAlpha = smoothstep(0.0, 0.12, cloudValue);
+                if (colAlpha < 0.01) continue;
+                ctx.globalAlpha = colAlpha;
+                ctx.drawImage(offCloud, px, 0, 2, offCloud.height, px, 0, 2, offCloud.height);
+            }
+            ctx.globalAlpha = 1;
+            ctx.restore();
 
             // Draw night sky darkening overlay - limited to sky portion (skyFadeEndY)
             for (let x = 0; x < width; x++) {
                 const t = x / width;
-                const dayValue = interpolateData(weatherData.daylight, t);
+                const dayValue = getDaylightAnalytical(tToHour(t), srHour, ssHour);
                 const cloudValue = interpolateData(weatherData.clouds, t);
 
                 // Night darkness intensity - stronger at night, fades during twilight
@@ -3243,14 +3329,8 @@
                     // Darkness ranges from 0.6 (clear) to 0.95 (overcast) smoothly
                     const darkness = nightness * (0.6 + cloudSmooth * 0.35);
 
-                    // Create gradient from top to skyFadeEndY (sky portion only, not precipitation area)
-                    const gradient = ctx.createLinearGradient(x, cropAmount, x, skyFadeEndY);
-                    gradient.addColorStop(0, `rgba(5, 8, 20, ${darkness})`);
-                    gradient.addColorStop(0.5, `rgba(8, 12, 28, ${darkness * 0.85})`);
-                    gradient.addColorStop(0.85, `rgba(10, 15, 35, ${darkness * 0.5})`);
-                    gradient.addColorStop(1, `rgba(12, 18, 40, 0)`);
-
-                    ctx.fillStyle = gradient;
+                    // Uniform night darkening — no vertical fade (night sky is already dark)
+                    ctx.fillStyle = `rgba(5, 8, 20, ${darkness})`;
                     ctx.fillRect(x, cropAmount, 1.5, skyFadeEndY - cropAmount);
                 }
             }
@@ -3270,7 +3350,7 @@
                 const starY = cropAmount + noise(i * 13.7, 1) * skyAreaHeight;
 
                 const t = starX / width;
-                const dayValue = interpolateData(weatherData.daylight, t);
+                const dayValue = getDaylightAnalytical(tToHour(t), srHour, ssHour);
                 const cloudValue = interpolateData(weatherData.clouds, t);
                 const starVisibility = 1 - smoothstep(0.0, 0.35, dayValue);
                 const cloudFade = 1 - smoothstep(0.3, 0.7, cloudValue);
@@ -3279,127 +3359,18 @@
                 if (combinedVisibility > 0.01) {
                     const size = 0.4 + noise(i, 2) * 1.0;
                     const brightness = 0.3 + noise(i, 3) * 0.7;
+                    // Apply same cosine fadeout in bottom 40% of sky
+                    const vertFrac = (starY - cropAmount) / skyAreaHeight;
+                    const vertFade = vertFrac > 0.6 ? 0.5 + 0.5 * Math.cos(((vertFrac - 0.6) / 0.4) * Math.PI) : 1;
                     const color = starColors[Math.floor(noise(i, 4) * starColors.length)];
-                    ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${combinedVisibility * brightness})`;
+                    ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${combinedVisibility * brightness * vertFade})`;
                     ctx.beginPath();
                     ctx.arc(starX, starY, size, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }
 
-            // Draw rain falling from clouds (only where there's rain)
-            // Rain extends over page background - realistic streaks with depth layers
-            if (maxRain > 0) {
-                // Multiple depth layers for parallax effect - closer drops are larger and more opaque
-                const dropLayers = [
-                    { count: 500, size: 0.8, opacity: 0.25, lengthMult: 0.7 },   // Far background
-                    { count: 400, size: 1.2, opacity: 0.4, lengthMult: 0.85 },   // Mid background
-                    { count: 300, size: 1.8, opacity: 0.55, lengthMult: 1.0 },   // Mid foreground
-                    { count: 200, size: 2.5, opacity: 0.7, lengthMult: 1.15 }    // Close foreground
-                ];
-
-                // Slight angle for wind-driven rain (about 10-12 degrees from vertical)
-                const rainAngle = 0.18; // x offset per y unit
-
-                dropLayers.forEach((layer, layerIdx) => {
-                    for (let i = 0; i < layer.count; i++) {
-                        const baseX = (noise(i, layerIdx) * width);
-                        const t = baseX / width;
-                        const rainValue = interpolateData(weatherData.rain, t);
-
-                        // Skip rain if there's snow at this position (show only snow)
-                        const snowValue = weatherData.snow ? interpolateData(weatherData.snow, t) : 0;
-                        if (snowValue > 0.05) continue;
-
-                        if (rainValue > 0.02 && noise(i * 2, layerIdx) < rainValue) {
-                            // Slight horizontal spread for natural variation
-                            const x = baseX + noise(i, layerIdx + 10) * 20 - 10;
-
-                            // Rain falls from clouds down through extended precipitation area
-                            const rainStartY = cropAmount + 20;
-                            const rainEndY = skyHeight + rainValue * precipExtensionHeight;
-                            const y = rainStartY + noise(i, layerIdx + 20) * (rainEndY - rainStartY);
-
-                            // Drop length varies with rain intensity and layer depth
-                            const baseLength = 8 + rainValue * 18;
-                            const dropLength = baseLength * layer.lengthMult;
-
-                            if (dropLength > 4) {
-                                // Calculate end position with slight angle
-                                const endX = x + dropLength * rainAngle;
-                                const endY = y + dropLength;
-
-                                // Gradient rain streak - brighter at top, fading at bottom
-                                const gradient = ctx.createLinearGradient(x, y, endX, endY);
-                                const r = 130, g = 175, b = 255;
-                                gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${layer.opacity * 0.3})`);
-                                gradient.addColorStop(0.2, `rgba(${r}, ${g}, ${b}, ${layer.opacity})`);
-                                gradient.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${layer.opacity * 0.6})`);
-                                gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-
-                                ctx.strokeStyle = gradient;
-                                ctx.lineWidth = layer.size;
-                                ctx.lineCap = 'round';
-                                ctx.beginPath();
-                                ctx.moveTo(x, y);
-                                ctx.lineTo(endX, endY);
-                                ctx.stroke();
-                            }
-                        }
-                    }
-                });
-
-            }
-
-            // Draw snow falling from clouds (only where there's snow)
-            // Snow extends over page background - soft glowing flakes with depth
-            const maxSnow = calculateMaxSnow();
-            if (maxSnow > 0) {
-                // Multiple depth layers for parallax - closer flakes larger and brighter
-                const snowLayers = [
-                    { count: 400, size: 1.0, opacity: 0.3, blur: 0.5 },   // Far background - tiny, dim
-                    { count: 350, size: 1.8, opacity: 0.5, blur: 0.3 },   // Mid background
-                    { count: 300, size: 2.8, opacity: 0.7, blur: 0.2 },   // Mid foreground
-                    { count: 200, size: 4.0, opacity: 0.9, blur: 0 }      // Close foreground - large, bright
-                ];
-
-                snowLayers.forEach((layer, layerIdx) => {
-                    for (let i = 0; i < layer.count; i++) {
-                        const baseX = noise(i, layerIdx + 50) * width;
-                        const t = baseX / width;
-                        const snowValue = interpolateData(weatherData.snow, t);
-
-                        if (snowValue > 0.05 && noise(i * 3, layerIdx + 60) < snowValue) {
-                            // Snowflakes drift sideways with gentle wave pattern
-                            const driftPhase = noise(i, layerIdx + 70) * Math.PI * 2;
-                            const driftAmount = 12 + noise(i * 2, layerIdx) * 10;
-                            const drift = Math.sin(driftPhase) * driftAmount;
-                            const x = baseX + drift;
-
-                            // Snow falls from clouds down through extended precipitation area
-                            const snowStartY = cropAmount + 20;
-                            const snowEndY = skyHeight + snowValue * precipExtensionHeight;
-                            const y = snowStartY + noise(i, layerIdx + 80) * (snowEndY - snowStartY);
-
-                            // Size varies slightly per flake
-                            const sizeVariation = 0.7 + noise(i, layerIdx + 90) * 0.6;
-                            const flakeSize = layer.size * sizeVariation;
-
-                            // Draw snowflake with soft radial gradient for glow effect
-                            const gradient = ctx.createRadialGradient(x, y, 0, x, y, flakeSize);
-                            gradient.addColorStop(0, `rgba(255, 255, 255, ${layer.opacity})`);
-                            gradient.addColorStop(0.4, `rgba(240, 248, 255, ${layer.opacity * 0.7})`);
-                            gradient.addColorStop(0.8, `rgba(220, 235, 255, ${layer.opacity * 0.3})`);
-                            gradient.addColorStop(1, `rgba(200, 220, 255, 0)`);
-
-                            ctx.fillStyle = gradient;
-                            ctx.beginPath();
-                            ctx.arc(x, y, flakeSize * 1.5, 0, Math.PI * 2);
-                            ctx.fill();
-                        }
-                    }
-                });
-            }
+            // Rain and snow are drawn on a separate precipitation canvas (see drawPrecipitation)
 
             // Time marker is handled via DOM element (see updateTimeMarker)
 
@@ -3894,6 +3865,181 @@
             });
 
             windAnimationId = requestAnimationFrame(drawWindAnimation);
+        }
+
+        // Precipitation layer — drawn on separate canvas, not affected by sky fadeout
+        function drawPrecipitation() {
+            if (!weatherData || !weatherData.rain) return;
+
+            const canvas = document.getElementById('precipCanvas');
+            const wrapper = document.getElementById('weatherDisplayWrapper');
+            const skyRibbonEl = document.getElementById('skyRibbon');
+            const ctx = canvas.getContext('2d');
+
+            const wrapperRect = wrapper.getBoundingClientRect();
+            const skyRect = skyRibbonEl.getBoundingClientRect();
+            const width = window.innerWidth;
+            const height = wrapperRect.height || window.innerHeight * 0.6;
+
+            // Set canvas to wrapper size
+            const newW = width * 2;
+            const newH = height * 2;
+            if (canvas.width !== newW || canvas.height !== newH) {
+                canvas.width = newW;
+                canvas.height = newH;
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+            } else {
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, newW, newH);
+            }
+            ctx.setTransform(2, 0, 0, 2, 0, 0);
+
+            // Coordinate mapping: precipitation uses sky ribbon x-range
+            const ribbonLeft = skyRect.left - wrapperRect.left;
+            const ribbonRight = skyRect.right - wrapperRect.left;
+            const ribbonTop = skyRect.top - wrapperRect.top;
+            const ribbonWidth = ribbonRight - ribbonLeft;
+            const ribbonBottom = skyRect.bottom - wrapperRect.top;
+            const ribbonHeight = ribbonBottom - ribbonTop;
+
+            // Match temp curve positioning to find its mid-height
+            const isPortraitTouch = isTouchDevice && window.innerHeight > window.innerWidth;
+            const curveHeightCap = isPortraitTouch ? 140 : 216;
+            const curveUpShift = isPortraitTouch ? 100 : 160;
+            const curveHeight = Math.min(height * 0.396, curveHeightCap);
+            const curveBottom = ribbonBottom + curveHeight * 0.8 - curveUpShift;
+            const curveTop = curveBottom - curveHeight;
+            const curveMid = (curveTop + curveBottom) / 2;
+
+            // Precipitation starts 45px below ribbon top (cloud bottom edge)
+            const precipStartY = ribbonTop + 45;
+            // Sky visual bottom (where sky gradient ends, before precip extension)
+            const fullBaseH = isPortraitTouch ? 160 : 240;
+            const skyExtH = isPortraitTouch ? 24 : 36;
+            const cropAmt = fullBaseH * 0.55;
+            const skyVisualBottom = ribbonTop + (fullBaseH + skyExtH - cropAmt);
+            // ≤5mm: rain extends from skyVisualBottom (144px) to 200px
+            // >5mm: extends further from 200px to temp curve mid
+            const skyBeyond = skyVisualBottom + 56; // 200px from ribbon top
+            const precipMaxEndY = curveMid;
+
+            const maxRain = calculateMaxRainHeight();
+            const maxSnow = calculateMaxSnow();
+
+            // Draw rain
+            if (maxRain > 0) {
+                const dropLayers = [
+                    { count: 500, size: 0.8, opacity: 0.7, lengthMult: 0.7 },
+                    { count: 400, size: 1.2, opacity: 0.85, lengthMult: 0.85 },
+                    { count: 300, size: 1.8, opacity: 0.95, lengthMult: 1.0 },
+                    { count: 200, size: 2.5, opacity: 1.0, lengthMult: 1.15 }
+                ];
+
+                const rainAngle = 0.18;
+
+                dropLayers.forEach((layer, layerIdx) => {
+                    for (let i = 0; i < layer.count; i++) {
+                        const t = noise(i, layerIdx);
+                        const baseX = ribbonLeft + t * ribbonWidth;
+                        const rainValue = interpolateData(weatherData.rain, t);
+
+                        const snowValue = weatherData.snow ? interpolateData(weatherData.snow, t) : 0;
+                        if (snowValue > 0.05) continue;
+
+                        if (rainValue > 0.02 && noise(i * 2, layerIdx) < rainValue) {
+                            const x = baseX + noise(i, layerIdx + 10) * 20 - 10;
+
+                            // ≤5mm (rainValue≤0.5): 144px→164px; >5mm: 164px→curveMid
+                            let rainEndY;
+                            if (rainValue <= 0.5) {
+                                const lightFrac = rainValue / 0.5;
+                                rainEndY = skyVisualBottom + lightFrac * (skyBeyond - skyVisualBottom);
+                            } else {
+                                const heavyFrac = (rainValue - 0.5) / 0.5;
+                                rainEndY = skyBeyond + heavyFrac * (precipMaxEndY - skyBeyond);
+                            }
+                            const y = precipStartY + noise(i, layerIdx + 20) * (rainEndY - precipStartY);
+
+                            const baseLength = 8 + rainValue * 18;
+                            let dropLength = baseLength * layer.lengthMult;
+
+                            // Clamp drop so it doesn't extend beyond its rain end
+                            if (y + dropLength > rainEndY) {
+                                dropLength = rainEndY - y;
+                            }
+
+                            if (dropLength > 4) {
+                                const endX = x + dropLength * rainAngle;
+                                const endY = y + dropLength;
+
+                                const gradient = ctx.createLinearGradient(x, y, endX, endY);
+                                const r = 100, g = 160, b = 255;
+                                gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${layer.opacity * 0.6})`);
+                                gradient.addColorStop(0.15, `rgba(${r}, ${g}, ${b}, ${layer.opacity})`);
+                                gradient.addColorStop(0.8, `rgba(${r}, ${g}, ${b}, ${layer.opacity * 0.8})`);
+                                gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${layer.opacity * 0.2})`);
+                                ctx.strokeStyle = gradient;
+                                ctx.lineWidth = layer.size;
+                                ctx.lineCap = 'round';
+                                ctx.beginPath();
+                                ctx.moveTo(x, y);
+                                ctx.lineTo(endX, endY);
+                                ctx.stroke();
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Draw snow
+            if (maxSnow > 0) {
+                const snowLayers = [
+                    { count: 400, size: 1.0, opacity: 0.8 },
+                    { count: 350, size: 1.8, opacity: 0.9 },
+                    { count: 300, size: 2.8, opacity: 1.0 },
+                    { count: 200, size: 4.0, opacity: 1.0 }
+                ];
+
+                snowLayers.forEach((layer, layerIdx) => {
+                    for (let i = 0; i < layer.count; i++) {
+                        const t = noise(i, layerIdx + 50);
+                        const baseX = ribbonLeft + t * ribbonWidth;
+                        const snowValue = interpolateData(weatherData.snow, t);
+
+                        if (snowValue > 0.05 && noise(i * 3, layerIdx + 60) < snowValue) {
+                            const driftPhase = noise(i, layerIdx + 70) * Math.PI * 2;
+                            const driftAmount = 12 + noise(i * 2, layerIdx) * 10;
+                            const drift = Math.sin(driftPhase) * driftAmount;
+                            const x = baseX + drift;
+
+                            // ≤5mm equiv (snowValue≤0.5): 144px→164px; >5mm: 164px→curveMid
+                            let snowEndY;
+                            if (snowValue <= 0.5) {
+                                const lightFrac = snowValue / 0.5;
+                                snowEndY = skyVisualBottom + lightFrac * (skyBeyond - skyVisualBottom);
+                            } else {
+                                const heavyFrac = (snowValue - 0.5) / 0.5;
+                                snowEndY = skyBeyond + heavyFrac * (precipMaxEndY - skyBeyond);
+                            }
+                            const y = precipStartY + noise(i, layerIdx + 80) * (snowEndY - precipStartY);
+
+                            const sizeVariation = 0.7 + noise(i, layerIdx + 90) * 0.6;
+                            const flakeSize = layer.size * sizeVariation;
+
+                            const gradient = ctx.createRadialGradient(x, y, 0, x, y, flakeSize * 1.5);
+                            gradient.addColorStop(0, `rgba(255, 255, 255, ${layer.opacity})`);
+                            gradient.addColorStop(0.3, `rgba(250, 252, 255, ${layer.opacity * 0.9})`);
+                            gradient.addColorStop(0.6, `rgba(230, 240, 255, ${layer.opacity * 0.5})`);
+                            gradient.addColorStop(1, `rgba(210, 225, 255, 0)`);
+                            ctx.fillStyle = gradient;
+                            ctx.beginPath();
+                            ctx.arc(x, y, flakeSize * 1.5, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                });
+            }
         }
 
         // Start wind animation
@@ -4465,6 +4611,7 @@
             // Draw sky ribbon first so its dimensions are available for temperature curve positioning
             drawSkyRibbon();
             drawTemperatureCurve();
+            drawPrecipitation();
             drawYearBand();
             startWindAnimation();
             updateTimeMarker();
@@ -5905,7 +6052,7 @@
             if (snowCm > 0.1) {
                 weatherInfo += ` | <span style="color: rgb(255, 255, 255)">${snowCm.toFixed(1)}cm snow</span>`;
             } else if (precipMm > 0.1) {
-                weatherInfo += ` | <span style="color: rgb(100, 180, 235)">${precipMm.toFixed(1)}mm rain</span>`;
+                weatherInfo += ` | <span style="color: rgb(100, 180, 235)">${Math.ceil(precipMm)}mm rain</span>`;
             }
 
             const currentHour = displayStartHour + t * (displayEndHour - displayStartHour);
@@ -5982,7 +6129,7 @@
                     weatherInfo += ` | <span style="color: rgb(255, 255, 255)">${snowCm.toFixed(1)}cm snow</span>`;
                 } else if (precipMm > 0.1) {
                     // Show rain in blue
-                    weatherInfo += ` | <span style="color: rgb(100, 180, 235)">${precipMm.toFixed(1)}mm rain</span>`;
+                    weatherInfo += ` | <span style="color: rgb(100, 180, 235)">${Math.ceil(precipMm)}mm rain</span>`;
                 }
 
                 // Add sunrise/sunset info if within 1 hour
