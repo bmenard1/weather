@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Weather Flow</title>
+    <link rel="preconnect" href="https://api.open-meteo.com" crossorigin>
+    <link rel="preconnect" href="https://archive-api.open-meteo.com" crossorigin>
+    <link rel="dns-prefetch" href="https://geocoding-api.open-meteo.com">
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="https://nominatim.openstreetmap.org">
 
     <!-- PWA Meta Tags -->
     <meta name="application-name" content="Weather Flow">
@@ -1267,7 +1272,6 @@
                     <div class="city-label-wrapper">
                         <button type="button" class="city-label" id="cityLabel" aria-label="Choose city">Tokyo</button>
                         <button type="button" class="random-btn" id="randomBtn" aria-label="Pick random city">random</button>
-                        <!-- <button class="random-btn" id="similarBtn">similar</button> -->
                     </div>
                 </div>
                 <button type="button" class="unit-btn" id="unitBtn" aria-label="Toggle temperature unit">°C</button>
@@ -1422,7 +1426,6 @@
         const DEFAULT_FETCH_RETRIES = 1;
         const MAX_WEATHER_CACHE_ENTRIES = 500;
         const MAX_YEAR_BAND_CACHE_ENTRIES = 64;
-        const MAX_HEATMAP_CACHE_ENTRIES = 60;
         const MAX_DYNAMIC_CITIES = 250;
 
         function pad2(n) {
@@ -1674,134 +1677,6 @@
         let currentMapLon = null;    // Last displayed dot longitude
         let currentExtraDots = null; // Array of {lat, lon, color} for similar cities
 
-        // Heatmap overlay state
-        const HEATMAP_ENABLED = false; // master toggle: world-map temperature heatmap (off for now, code retained)
-        let heatmapGridCache = {};     // dateStr → 2D array [row][col] of tempC
-        const heatmapGridCacheOrder = [];
-        let currentHeatmapGrid = null; // currently loaded grid data
-        let heatmapFadeTimeout = null; // 3s delay before fade starts
-        let heatmapFadeAnimId = null;  // RAF id for fade animation
-
-        // Fade out heatmap over ~1 second, leaving only outlines + city dot
-        function startHeatmapFade(canvas) {
-            if (heatmapFadeAnimId) { cancelAnimationFrame(heatmapFadeAnimId); heatmapFadeAnimId = null; }
-            const ctx = canvas.getContext('2d');
-            const rect = canvas.getBoundingClientRect();
-            const duration = 1000;
-            const startTime = performance.now();
-            function frame(now) {
-                const elapsed = now - startTime;
-                const t = Math.min(1, elapsed / duration);
-                const alpha = 1 - t; // 1 → 0
-                ctx.setTransform(2, 0, 0, 2, 0, 0);
-                ctx.clearRect(0, 0, rect.width, rect.height);
-                drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots, currentHeatmapGrid, alpha);
-                if (t < 1) {
-                    heatmapFadeAnimId = requestAnimationFrame(frame);
-                } else {
-                    heatmapFadeAnimId = null;
-                }
-            }
-            heatmapFadeAnimId = requestAnimationFrame(frame);
-        }
-
-        function cancelHeatmapFade() {
-            if (heatmapFadeTimeout) { clearTimeout(heatmapFadeTimeout); heatmapFadeTimeout = null; }
-            if (heatmapFadeAnimId) { cancelAnimationFrame(heatmapFadeAnimId); heatmapFadeAnimId = null; }
-        }
-
-        function scheduleHeatmapFade(canvas) {
-            cancelHeatmapFade();
-            heatmapFadeTimeout = setTimeout(() => {
-                heatmapFadeTimeout = null;
-                startHeatmapFade(canvas);
-            }, 6000);
-        }
-        const HEATMAP_LAT_MIN = -60, HEATMAP_LAT_MAX = 80;
-        const HEATMAP_LON_MIN = -180, HEATMAP_LON_MAX = 170;
-        const HEATMAP_STEP = 10;
-        const HEATMAP_ROWS = 15; // (80 - (-60)) / 10 + 1
-        const HEATMAP_COLS = 36; // (170 - (-180)) / 10 + 1
-
-        // Fetch temperature grid for heatmap overlay
-        async function fetchHeatmapGrid(dateStr) {
-            if (!HEATMAP_ENABLED) return null;
-            const cachedGrid = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
-            if (cachedGrid) return cachedGrid;
-
-            // Generate grid points
-            const gridPoints = [];
-            for (let row = 0; row < HEATMAP_ROWS; row++) {
-                for (let col = 0; col < HEATMAP_COLS; col++) {
-                    gridPoints.push({
-                        lat: HEATMAP_LAT_MIN + row * HEATMAP_STEP,
-                        lon: HEATMAP_LON_MIN + col * HEATMAP_STEP,
-                        row, col
-                    });
-                }
-            }
-
-            // Choose API based on date
-            const todayDateStr = formatDateInTimeZone(new Date(), USER_TIME_ZONE);
-            const diffDays = diffDateStrings(dateStr, todayDateStr);
-            const isHistorical = diffDays < -5;
-            const baseUrl = isHistorical
-                ? 'https://archive-api.open-meteo.com/v1/archive'
-                : 'https://api.open-meteo.com/v1/forecast';
-
-            // Batch into groups of 50
-            const batchSize = 50;
-            const batches = [];
-            for (let i = 0; i < gridPoints.length; i += batchSize) {
-                batches.push(gridPoints.slice(i, i + batchSize));
-            }
-
-            // Initialize result grid
-            const grid = [];
-            for (let r = 0; r < HEATMAP_ROWS; r++) {
-                grid.push(new Array(HEATMAP_COLS).fill(null));
-            }
-
-            // Fetch all batches in parallel
-            const batchResults = await Promise.allSettled(batches.map(async (batch) => {
-                const lats = batch.map(p => p.lat).join(',');
-                const lons = batch.map(p => p.lon).join(',');
-                const url = `${baseUrl}?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,is_day&start_date=${dateStr}&end_date=${dateStr}&timezone=auto`;
-                const json = await fetchJsonWithRetry(url, { retries: 1, timeoutMs: 15000 });
-                return { batch, json };
-            }));
-
-            batchResults.forEach(result => {
-                if (result.status === 'fulfilled') {
-                    const { batch, json } = result.value;
-                    const items = Array.isArray(json) ? json : [json];
-                    items.forEach((item, idx) => {
-                        const pt = batch[idx];
-                        if (item.hourly && item.hourly.temperature_2m && item.hourly.is_day) {
-                            let s = 0, c = 0;
-                            for (let h = 0; h < item.hourly.temperature_2m.length; h++) {
-                                if (item.hourly.is_day[h]) {
-                                    s += item.hourly.temperature_2m[h];
-                                    c++;
-                                }
-                            }
-                            if (c > 0) {
-                                grid[pt.row][pt.col] = s / c;
-                            } else {
-                                // All hours are night (polar), use overall mean
-                                const temps = item.hourly.temperature_2m.filter(t => t !== null);
-                                if (temps.length > 0) {
-                                    grid[pt.row][pt.col] = temps.reduce((a, b) => a + b, 0) / temps.length;
-                                }
-                            }
-                        }
-                    });
-                }
-            });
-
-            setBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr, grid, MAX_HEATMAP_CACHE_ENTRIES);
-            return grid;
-        }
 
         // Fetch and decode TopoJSON country data (110m simplified from Natural Earth)
         async function fetchWorldMapData() {
@@ -1890,77 +1765,9 @@
             }
         }
 
-        // Draw heatmap overlay clipped to land masses
-        function drawHeatmapOverlay(ctx, mapBounds, polygons, gridData) {
-            // Build offscreen canvas with grid temperatures
-            const offscreen = document.createElement('canvas');
-            offscreen.width = HEATMAP_COLS;
-            offscreen.height = HEATMAP_ROWS;
-            const offCtx = offscreen.getContext('2d');
-            const imgData = offCtx.createImageData(HEATMAP_COLS, HEATMAP_ROWS);
-
-            for (let row = 0; row < HEATMAP_ROWS; row++) {
-                for (let col = 0; col < HEATMAP_COLS; col++) {
-                    const tempC = gridData[row][col];
-                    const idx = ((HEATMAP_ROWS - 1 - row) * HEATMAP_COLS + col) * 4; // flip Y: row 0 is -60° (bottom)
-                    if (tempC !== null) {
-                        const color = getTempColor((tempC + 25) / 60);
-                        imgData.data[idx] = Math.round(color.r);
-                        imgData.data[idx + 1] = Math.round(color.g);
-                        imgData.data[idx + 2] = Math.round(color.b);
-                        imgData.data[idx + 3] = 140; // ~0.55 alpha
-                    }
-                    // null cells stay transparent (0,0,0,0)
-                }
-            }
-            offCtx.putImageData(imgData, 0, 0);
-
-            // Clip to land polygons
-            ctx.save();
-            ctx.beginPath();
-            polygons.forEach(ring => {
-                if (ring.length < 3) return;
-                const allSouth = ring.every(pt => pt[1] < -60);
-                if (allSouth) return;
-                const first = projectGeo(ring[0][0], ring[0][1], mapBounds);
-                ctx.moveTo(first.x, first.y);
-                for (let i = 1; i < ring.length; i++) {
-                    const p = projectGeo(ring[i][0], ring[i][1], mapBounds);
-                    const lonJump = Math.abs(ring[i][0] - ring[i - 1][0]);
-                    if (lonJump > 90) {
-                        ctx.moveTo(p.x, p.y);
-                    } else {
-                        ctx.lineTo(p.x, p.y);
-                    }
-                }
-            });
-            ctx.clip();
-
-            // Draw the tiny heatmap stretched to map bounds with bilinear smoothing
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-
-            // Map the grid's lat/lon range to canvas pixel coordinates
-            const topLeft = projectGeo(HEATMAP_LON_MIN - HEATMAP_STEP / 2, HEATMAP_LAT_MAX + HEATMAP_STEP / 2, mapBounds);
-            const bottomRight = projectGeo(HEATMAP_LON_MAX + HEATMAP_STEP / 2, HEATMAP_LAT_MIN - HEATMAP_STEP / 2, mapBounds);
-            ctx.drawImage(offscreen, topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
-
-            ctx.restore();
-        }
-
-        // Draw the world map with country outlines and city marker
         // Draw country outlines + extra dots (background layer, no main city dot)
-        function drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData, heatmapAlpha) {
-            // Draw heatmap underneath if active
-            if (HEATMAP_ENABLED && heatmapGridData && (heatmapAlpha === undefined || heatmapAlpha > 0.01)) {
-                ctx.save();
-                ctx.globalAlpha = heatmapAlpha !== undefined ? heatmapAlpha : 1;
-                drawHeatmapOverlay(ctx, mapBounds, polygons, heatmapGridData);
-                ctx.restore();
-            }
-
-            const hasHeatmap = heatmapGridData && (heatmapAlpha === undefined || heatmapAlpha > 0.01);
-            ctx.strokeStyle = hasHeatmap ? 'rgba(100, 130, 180, 0.5)' : 'rgba(100, 130, 180, 0.3)';
+        function drawWorldMapBackground(ctx, polygons, mapBounds, extraDots) {
+            ctx.strokeStyle = 'rgba(100, 130, 180, 0.3)';
             ctx.lineWidth = 0.5;
             polygons.forEach(ring => {
                 if (ring.length < 3) return;
@@ -2012,14 +1819,14 @@
         }
 
         // Draw full world map (background + city dot)
-        function drawWorldMap(ctx, polygons, cityLat, cityLon, mapBounds, extraDots, heatmapGridData, heatmapAlpha) {
-            drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData, heatmapAlpha);
+        function drawWorldMap(ctx, polygons, cityLat, cityLon, mapBounds, extraDots) {
+            drawWorldMapBackground(ctx, polygons, mapBounds, extraDots);
             drawCityDot(ctx, cityLat, cityLon, mapBounds);
         }
 
         // Animate dot from one position to another on the map
         let dotAnimationId = null;
-        function animateDotTransition(canvas, fromLat, fromLon, toLat, toLon, duration, showHeatmap) {
+        function animateDotTransition(canvas, fromLat, fromLon, toLat, toLon, duration) {
             if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
             const ctx = canvas.getContext('2d');
             const rect = canvas.getBoundingClientRect();
@@ -2029,7 +1836,7 @@
             // Draw background once and cache as ImageData
             ctx.setTransform(2, 0, 0, 2, 0, 0);
             ctx.clearRect(0, 0, mapWidth, mapHeight);
-            drawWorldMapBackground(ctx, worldMapPolygons, currentMapBounds, currentExtraDots, showHeatmap ? currentHeatmapGrid : null);
+            drawWorldMapBackground(ctx, worldMapPolygons, currentMapBounds, currentExtraDots);
             const baseImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
             const startTime = performance.now();
@@ -2063,7 +1870,6 @@
             if (mapFadeTimeout) { clearTimeout(mapFadeTimeout); mapFadeTimeout = null; }
             if (mapClearTimeout) { clearTimeout(mapClearTimeout); mapClearTimeout = null; }
             if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
-            cancelHeatmapFade();
 
             const canvas = document.getElementById('worldMapCanvas');
             const mapAlreadyVisible = canvas.classList.contains('visible') && currentMapBounds && currentMapLat !== null;
@@ -2076,35 +1882,11 @@
             currentMapLat = cityLat;
             currentMapLon = cityLon;
 
-            // If map is already visible, animate the dot (outlines only, no heatmap)
+            // If map is already visible, animate the dot
             if (mapAlreadyVisible) {
-                cancelHeatmapFade();
-                animateDotTransition(canvas, prevLat, prevLon, cityLat, cityLon, 800, false);
+                animateDotTransition(canvas, prevLat, prevLon, cityLat, cityLon, 800);
                 scheduleMapFadeOut(canvas);
                 return;
-            }
-
-            // Fetch heatmap grid for current date (only on first show)
-            const city = cities[currentCity];
-            const dateStr = getDateForOffset(city, currentDayOffset);
-            const cachedHeatmap = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
-            if (cachedHeatmap) {
-                currentHeatmapGrid = cachedHeatmap;
-            } else {
-                const requestedDateStr = dateStr;
-                fetchHeatmapGrid(requestedDateStr).then(grid => {
-                    const latestDateStr = getDateForOffset(cities[currentCity], currentDayOffset);
-                    if (latestDateStr !== requestedDateStr) return;
-                    currentHeatmapGrid = grid;
-                    // Redraw map with heatmap if still visible
-                    if (canvas.classList.contains('visible') && currentMapBounds && worldMapPolygons) {
-                        const ctx = canvas.getContext('2d');
-                        const rect = canvas.getBoundingClientRect();
-                        ctx.setTransform(2, 0, 0, 2, 0, 0);
-                        ctx.clearRect(0, 0, rect.width, rect.height);
-                        drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots, currentHeatmapGrid);
-                    }
-                }).catch(e => console.error('Heatmap fetch failed:', e));
             }
 
             canvas.classList.remove('visible');
@@ -2147,7 +1929,7 @@
             // Draw once (static, no animation)
             const ctx = canvas.getContext('2d');
             ctx.setTransform(2, 0, 0, 2, 0, 0);
-            drawWorldMap(ctx, polygons, cityLat, cityLon, currentMapBounds, currentExtraDots, currentHeatmapGrid);
+            drawWorldMap(ctx, polygons, cityLat, cityLon, currentMapBounds, currentExtraDots);
 
             // Fade in
             canvas.style.pointerEvents = '';
@@ -2156,8 +1938,6 @@
 
             // After 8 seconds, fade out entire map
             scheduleMapFadeOut(canvas);
-            // After 3 seconds, fade out heatmap colors (keep outlines)
-            scheduleHeatmapFade(canvas);
         }
 
         // Schedule the map fade-out timer
@@ -2174,7 +1954,6 @@
                 // Clean up after the 5s fade-out transition completes
                 mapClearTimeout = setTimeout(() => {
                     if (dotAnimationId) { cancelAnimationFrame(dotAnimationId); dotAnimationId = null; }
-                    cancelHeatmapFade();
                     canvas.style.pointerEvents = '';
                     currentMapBounds = null;
                     currentMapLat = null;
@@ -2222,7 +2001,7 @@
 
             const ctx = canvas.getContext('2d');
             ctx.setTransform(2, 0, 0, 2, 0, 0);
-            drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots, currentHeatmapGrid);
+            drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots);
         }
 
         // Click on the map to select a location
@@ -2251,7 +2030,7 @@
             ctx.setTransform(2, 0, 0, 2, 0, 0);
             ctx.clearRect(0, 0, mapWidth, mapHeight);
             currentExtraDots = null; // Clear similar-city dots on new location pick
-            drawWorldMap(ctx, worldMapPolygons, lat, lon, currentMapBounds, null, currentHeatmapGrid);
+            drawWorldMap(ctx, worldMapPolygons, lat, lon, currentMapBounds, null);
 
             // Restore full visibility (in case we're mid-fade) and reset timer
             canvas.classList.add('visible');
@@ -2911,29 +2690,6 @@
                         });
                 }
 
-                // Update heatmap if map is visible and day changed (non-blocking)
-                const mapCanvas = document.getElementById('worldMapCanvas');
-                if (mapCanvas.classList.contains('visible') && currentMapBounds) {
-                    const city = cities[currentCity];
-                    const dateStr = getDateForOffset(city, currentDayOffset);
-                    const cachedGrid = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
-                    if (cachedGrid) {
-                        currentHeatmapGrid = cachedGrid;
-                        if (worldMapPolygons) resizeWorldMap();
-                    } else {
-                        fetchHeatmapGrid(dateStr).then(grid => {
-                            if (refreshToken !== refreshRequestToken) return;
-                            currentHeatmapGrid = grid;
-                            if (mapCanvas.classList.contains('visible') && currentMapBounds && worldMapPolygons) {
-                                resizeWorldMap();
-                            }
-                        }).catch((error) => {
-                            if (!isAbortError(error)) {
-                                console.error('Heatmap fetch failed:', error);
-                            }
-                        });
-                    }
-                }
             } catch (error) {
                 if (!isAbortError(error)) {
                     console.error('Refresh failed:', error);
@@ -5333,440 +5089,6 @@
                 scheduleMobileUtilitiesHide(1800);
             });
         }
-
-        /* // Handle similar capitals button — commented out for now
-        const similarCache = {};
-        document.getElementById('similarBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('similarBtn');
-            if (!fullWeatherData || !fullWeatherData.temperature || !fullWeatherData.daylight) return;
-
-            // Compute current city's mean daytime temperature in °C
-            let sum = 0, count = 0;
-            for (let i = 0; i < 24; i++) {
-                if (fullWeatherData.daylight[i] > 0.5) {
-                    sum += fullWeatherData.temperature[i];
-                    count++;
-                }
-            }
-            if (count === 0) return;
-            const currentMeanNorm = sum / count;
-            const currentMeanC = currentMeanNorm * 60 - 25;
-
-            // Get date string for the selected day
-            const city = cities[currentCity];
-            const dateStr = getDateForOffset(city, currentDayOffset);
-            const cacheKey = dateStr;
-
-            btn.textContent = '...';
-            btn.disabled = true;
-
-            try {
-                let allCapitalTemps;
-                if (similarCache[cacheKey]) {
-                    allCapitalTemps = similarCache[cacheKey];
-                } else {
-                    allCapitalTemps = await fetchCityTemperatures(dateStr);
-                    similarCache[cacheKey] = allCapitalTemps;
-                }
-
-                // Filter capitals within ±4°C of current city's mean daytime temp
-                const threshold = 4;
-                const currentLat = city.lat;
-                const currentLon = city.lon;
-                const similarDots = [];
-                allCapitalTemps.forEach(cap => {
-                    // Skip current city (within ~0.1° lat/lon)
-                    if (Math.abs(cap.lat - currentLat) < 0.2 && Math.abs(cap.lon - currentLon) < 0.2) return;
-                    if (cap.meanTempC != null && Math.abs(cap.meanTempC - currentMeanC) <= threshold) {
-                        const normTemp = (cap.meanTempC + 25) / 60;
-                        similarDots.push({
-                            lat: cap.lat,
-                            lon: cap.lon,
-                            color: getTempColor(normTemp)
-                        });
-                    }
-                });
-
-                currentExtraDots = similarDots;
-                showWorldMap(city.lat, city.lon);
-            } catch (e) {
-                console.error('Failed to fetch similar capitals:', e);
-            } finally {
-                btn.textContent = 'similar';
-                btn.disabled = false;
-            }
-        });
-
-        // Cities with 1M+ population for temperature comparison
-        const majorCities = [
-            // East Asia — China
-            { name: 'Shanghai', lat: 31.23, lon: 121.47 },
-            { name: 'Beijing', lat: 39.90, lon: 116.41 },
-            { name: 'Guangzhou', lat: 23.13, lon: 113.26 },
-            { name: 'Shenzhen', lat: 22.54, lon: 114.06 },
-            { name: 'Chengdu', lat: 30.57, lon: 104.07 },
-            { name: 'Chongqing', lat: 29.56, lon: 106.55 },
-            { name: 'Tianjin', lat: 39.14, lon: 117.18 },
-            { name: 'Wuhan', lat: 30.59, lon: 114.31 },
-            { name: 'Hangzhou', lat: 30.27, lon: 120.15 },
-            { name: 'Nanjing', lat: 32.06, lon: 118.80 },
-            { name: "Xi'an", lat: 34.26, lon: 108.94 },
-            { name: 'Zhengzhou', lat: 34.75, lon: 113.65 },
-            { name: 'Shenyang', lat: 41.80, lon: 123.43 },
-            { name: 'Changsha', lat: 28.23, lon: 112.94 },
-            { name: 'Dongguan', lat: 23.04, lon: 113.72 },
-            { name: 'Harbin', lat: 45.75, lon: 126.65 },
-            { name: 'Kunming', lat: 25.04, lon: 102.68 },
-            { name: 'Jinan', lat: 36.67, lon: 116.98 },
-            { name: 'Dalian', lat: 38.91, lon: 121.60 },
-            { name: 'Qingdao', lat: 36.07, lon: 120.38 },
-            { name: 'Fuzhou', lat: 26.07, lon: 119.30 },
-            { name: 'Hefei', lat: 31.82, lon: 117.23 },
-            { name: 'Changchun', lat: 43.88, lon: 125.32 },
-            { name: 'Ürümqi', lat: 43.83, lon: 87.60 },
-            { name: 'Nanning', lat: 22.82, lon: 108.32 },
-            { name: 'Guiyang', lat: 26.65, lon: 106.63 },
-            { name: 'Shijiazhuang', lat: 38.04, lon: 114.51 },
-            { name: 'Taiyuan', lat: 37.87, lon: 112.55 },
-            { name: 'Lanzhou', lat: 36.06, lon: 103.83 },
-            { name: 'Nanchang', lat: 28.68, lon: 115.86 },
-            { name: 'Suzhou', lat: 31.30, lon: 120.59 },
-            { name: 'Xiamen', lat: 24.48, lon: 118.09 },
-            { name: 'Ningbo', lat: 29.87, lon: 121.54 },
-            { name: 'Wuxi', lat: 31.57, lon: 120.30 },
-            { name: 'Foshan', lat: 23.02, lon: 113.12 },
-            { name: 'Hong Kong', lat: 22.32, lon: 114.17 },
-            // Japan
-            { name: 'Tokyo', lat: 35.68, lon: 139.69 },
-            { name: 'Osaka', lat: 34.69, lon: 135.50 },
-            { name: 'Yokohama', lat: 35.44, lon: 139.64 },
-            { name: 'Nagoya', lat: 35.18, lon: 136.91 },
-            { name: 'Sapporo', lat: 43.06, lon: 141.35 },
-            { name: 'Fukuoka', lat: 33.59, lon: 130.40 },
-            { name: 'Kobe', lat: 34.69, lon: 135.20 },
-            { name: 'Kyoto', lat: 35.01, lon: 135.77 },
-            { name: 'Kawasaki', lat: 35.52, lon: 139.72 },
-            // South Korea
-            { name: 'Seoul', lat: 37.57, lon: 126.98 },
-            { name: 'Busan', lat: 35.18, lon: 129.08 },
-            { name: 'Incheon', lat: 37.46, lon: 126.71 },
-            { name: 'Daegu', lat: 35.87, lon: 128.60 },
-            { name: 'Daejeon', lat: 36.35, lon: 127.38 },
-            // Taiwan
-            { name: 'Taipei', lat: 25.03, lon: 121.57 },
-            { name: 'Kaohsiung', lat: 22.63, lon: 120.30 },
-            // Mongolia
-            { name: 'Ulaanbaatar', lat: 47.92, lon: 106.92 },
-            // Southeast Asia
-            { name: 'Jakarta', lat: -6.21, lon: 106.85 },
-            { name: 'Bangkok', lat: 13.76, lon: 100.50 },
-            { name: 'Ho Chi Minh City', lat: 10.82, lon: 106.63 },
-            { name: 'Hanoi', lat: 21.03, lon: 105.85 },
-            { name: 'Singapore', lat: 1.29, lon: 103.85 },
-            { name: 'Kuala Lumpur', lat: 3.14, lon: 101.69 },
-            { name: 'Manila', lat: 14.60, lon: 120.98 },
-            { name: 'Yangon', lat: 16.87, lon: 96.20 },
-            { name: 'Phnom Penh', lat: 11.56, lon: 104.92 },
-            { name: 'Surabaya', lat: -7.25, lon: 112.75 },
-            { name: 'Bandung', lat: -6.91, lon: 107.61 },
-            { name: 'Medan', lat: 3.59, lon: 98.67 },
-            { name: 'Semarang', lat: -6.97, lon: 110.42 },
-            { name: 'Makassar', lat: -5.14, lon: 119.42 },
-            { name: 'Quezon City', lat: 14.68, lon: 121.03 },
-            { name: 'Davao', lat: 7.07, lon: 125.61 },
-            // South Asia — India
-            { name: 'Mumbai', lat: 19.08, lon: 72.88 },
-            { name: 'Delhi', lat: 28.61, lon: 77.21 },
-            { name: 'Bangalore', lat: 12.97, lon: 77.59 },
-            { name: 'Hyderabad', lat: 17.38, lon: 78.49 },
-            { name: 'Ahmedabad', lat: 23.02, lon: 72.57 },
-            { name: 'Chennai', lat: 13.08, lon: 80.27 },
-            { name: 'Kolkata', lat: 22.57, lon: 88.36 },
-            { name: 'Pune', lat: 18.52, lon: 73.86 },
-            { name: 'Jaipur', lat: 26.91, lon: 75.79 },
-            { name: 'Lucknow', lat: 26.85, lon: 80.95 },
-            { name: 'Kanpur', lat: 26.45, lon: 80.33 },
-            { name: 'Nagpur', lat: 21.15, lon: 79.09 },
-            { name: 'Indore', lat: 22.72, lon: 75.86 },
-            { name: 'Patna', lat: 25.61, lon: 85.14 },
-            { name: 'Bhopal', lat: 23.26, lon: 77.41 },
-            { name: 'Surat', lat: 21.17, lon: 72.83 },
-            { name: 'Visakhapatnam', lat: 17.69, lon: 83.22 },
-            { name: 'Varanasi', lat: 25.32, lon: 83.01 },
-            { name: 'Coimbatore', lat: 11.01, lon: 76.96 },
-            { name: 'Vadodara', lat: 22.31, lon: 73.19 },
-            { name: 'Ludhiana', lat: 30.90, lon: 75.86 },
-            { name: 'Agra', lat: 27.18, lon: 78.02 },
-            { name: 'Nashik', lat: 19.99, lon: 73.79 },
-            { name: 'Rajkot', lat: 22.30, lon: 70.80 },
-            { name: 'Ranchi', lat: 23.36, lon: 85.33 },
-            { name: 'Amritsar', lat: 31.63, lon: 74.87 },
-            // Pakistan
-            { name: 'Karachi', lat: 24.86, lon: 67.01 },
-            { name: 'Lahore', lat: 31.55, lon: 74.35 },
-            { name: 'Faisalabad', lat: 31.42, lon: 73.08 },
-            { name: 'Rawalpindi', lat: 33.60, lon: 73.05 },
-            { name: 'Multan', lat: 30.20, lon: 71.45 },
-            { name: 'Peshawar', lat: 34.01, lon: 71.58 },
-            { name: 'Gujranwala', lat: 32.16, lon: 74.19 },
-            // Bangladesh
-            { name: 'Dhaka', lat: 23.81, lon: 90.41 },
-            { name: 'Chittagong', lat: 22.36, lon: 91.78 },
-            // Sri Lanka, Nepal
-            { name: 'Colombo', lat: 6.93, lon: 79.85 },
-            { name: 'Kathmandu', lat: 27.72, lon: 85.32 },
-            // Central Asia
-            { name: 'Tashkent', lat: 41.30, lon: 69.28 },
-            { name: 'Almaty', lat: 43.24, lon: 76.95 },
-            { name: 'Astana', lat: 51.17, lon: 71.43 },
-            // Middle East — Turkey
-            { name: 'Istanbul', lat: 41.01, lon: 28.98 },
-            { name: 'Ankara', lat: 39.93, lon: 32.86 },
-            { name: 'Izmir', lat: 38.42, lon: 27.14 },
-            { name: 'Bursa', lat: 40.19, lon: 29.06 },
-            { name: 'Antalya', lat: 36.90, lon: 30.70 },
-            { name: 'Adana', lat: 37.00, lon: 35.33 },
-            { name: 'Gaziantep', lat: 37.06, lon: 37.38 },
-            // Iran
-            { name: 'Tehran', lat: 35.69, lon: 51.39 },
-            { name: 'Mashhad', lat: 36.30, lon: 59.60 },
-            { name: 'Isfahan', lat: 32.65, lon: 51.68 },
-            { name: 'Tabriz', lat: 38.08, lon: 46.29 },
-            { name: 'Shiraz', lat: 29.59, lon: 52.58 },
-            { name: 'Karaj', lat: 35.84, lon: 50.97 },
-            // Iraq
-            { name: 'Baghdad', lat: 33.31, lon: 44.37 },
-            { name: 'Basra', lat: 30.51, lon: 47.81 },
-            { name: 'Mosul', lat: 36.34, lon: 43.12 },
-            // Arabian Peninsula
-            { name: 'Riyadh', lat: 24.69, lon: 46.72 },
-            { name: 'Jeddah', lat: 21.54, lon: 39.17 },
-            { name: 'Mecca', lat: 21.39, lon: 39.86 },
-            { name: 'Dubai', lat: 25.20, lon: 55.27 },
-            { name: 'Sanaa', lat: 15.35, lon: 44.21 },
-            { name: 'Kuwait City', lat: 29.38, lon: 47.99 },
-            // Levant & Caucasus
-            { name: 'Amman', lat: 31.95, lon: 35.93 },
-            { name: 'Damascus', lat: 33.51, lon: 36.29 },
-            { name: 'Aleppo', lat: 36.20, lon: 37.16 },
-            { name: 'Tel Aviv', lat: 32.09, lon: 34.78 },
-            { name: 'Beirut', lat: 33.89, lon: 35.50 },
-            { name: 'Baku', lat: 40.41, lon: 49.87 },
-            { name: 'Tbilisi', lat: 41.72, lon: 44.79 },
-            { name: 'Yerevan', lat: 40.18, lon: 44.51 },
-            // Africa — North
-            { name: 'Cairo', lat: 30.04, lon: 31.24 },
-            { name: 'Alexandria', lat: 31.20, lon: 29.92 },
-            { name: 'Algiers', lat: 36.74, lon: 3.06 },
-            { name: 'Casablanca', lat: 33.57, lon: -7.59 },
-            { name: 'Rabat', lat: 34.02, lon: -6.83 },
-            { name: 'Fes', lat: 34.03, lon: -5.00 },
-            { name: 'Tunis', lat: 36.81, lon: 10.18 },
-            { name: 'Tripoli', lat: 32.90, lon: 13.18 },
-            { name: 'Khartoum', lat: 15.59, lon: 32.53 },
-            // West Africa
-            { name: 'Lagos', lat: 6.52, lon: 3.38 },
-            { name: 'Kano', lat: 12.00, lon: 8.51 },
-            { name: 'Ibadan', lat: 7.38, lon: 3.94 },
-            { name: 'Abuja', lat: 9.06, lon: 7.49 },
-            { name: 'Accra', lat: 5.56, lon: -0.19 },
-            { name: 'Abidjan', lat: 5.32, lon: -4.00 },
-            { name: 'Dakar', lat: 14.69, lon: -17.44 },
-            { name: 'Bamako', lat: 12.64, lon: -8.00 },
-            { name: 'Ouagadougou', lat: 12.37, lon: -1.52 },
-            { name: 'Conakry', lat: 9.64, lon: -13.58 },
-            { name: 'Douala', lat: 4.05, lon: 9.77 },
-            { name: 'Yaoundé', lat: 3.87, lon: 11.52 },
-            // East Africa
-            { name: 'Addis Ababa', lat: 9.03, lon: 38.75 },
-            { name: 'Nairobi', lat: -1.29, lon: 36.82 },
-            { name: 'Dar es Salaam', lat: -6.79, lon: 39.28 },
-            { name: 'Kampala', lat: 0.32, lon: 32.58 },
-            { name: 'Mogadishu', lat: 2.05, lon: 45.32 },
-            { name: 'Kigali', lat: -1.94, lon: 30.06 },
-            // Central & Southern Africa
-            { name: 'Kinshasa', lat: -4.32, lon: 15.31 },
-            { name: 'Luanda', lat: -8.84, lon: 13.23 },
-            { name: 'Johannesburg', lat: -26.20, lon: 28.05 },
-            { name: 'Cape Town', lat: -33.93, lon: 18.42 },
-            { name: 'Durban', lat: -29.86, lon: 31.02 },
-            { name: 'Lusaka', lat: -15.39, lon: 28.32 },
-            { name: 'Harare', lat: -17.83, lon: 31.05 },
-            { name: 'Maputo', lat: -25.97, lon: 32.58 },
-            { name: 'Antananarivo', lat: -18.88, lon: 47.51 },
-            // Europe — Russia
-            { name: 'Moscow', lat: 55.76, lon: 37.62 },
-            { name: 'St Petersburg', lat: 59.93, lon: 30.32 },
-            { name: 'Novosibirsk', lat: 55.01, lon: 82.92 },
-            { name: 'Yekaterinburg', lat: 56.84, lon: 60.60 },
-            { name: 'Kazan', lat: 55.80, lon: 49.11 },
-            { name: 'Nizhny Novgorod', lat: 56.30, lon: 44.00 },
-            { name: 'Chelyabinsk', lat: 55.16, lon: 61.40 },
-            { name: 'Samara', lat: 53.19, lon: 50.10 },
-            { name: 'Rostov-on-Don', lat: 47.24, lon: 39.71 },
-            { name: 'Ufa', lat: 54.74, lon: 55.97 },
-            { name: 'Krasnoyarsk', lat: 56.01, lon: 92.87 },
-            { name: 'Perm', lat: 58.01, lon: 56.25 },
-            { name: 'Voronezh', lat: 51.67, lon: 39.18 },
-            { name: 'Volgograd', lat: 48.72, lon: 44.50 },
-            { name: 'Omsk', lat: 54.99, lon: 73.37 },
-            // Western Europe
-            { name: 'London', lat: 51.51, lon: -0.13 },
-            { name: 'Birmingham', lat: 52.48, lon: -1.90 },
-            { name: 'Paris', lat: 48.86, lon: 2.35 },
-            { name: 'Berlin', lat: 52.52, lon: 13.41 },
-            { name: 'Hamburg', lat: 53.55, lon: 10.00 },
-            { name: 'Munich', lat: 48.14, lon: 11.58 },
-            { name: 'Cologne', lat: 50.94, lon: 6.96 },
-            { name: 'Madrid', lat: 40.42, lon: -3.70 },
-            { name: 'Barcelona', lat: 41.39, lon: 2.17 },
-            { name: 'Rome', lat: 41.90, lon: 12.50 },
-            { name: 'Milan', lat: 45.46, lon: 9.19 },
-            { name: 'Naples', lat: 40.85, lon: 14.27 },
-            { name: 'Vienna', lat: 48.21, lon: 16.37 },
-            { name: 'Amsterdam', lat: 52.37, lon: 4.90 },
-            { name: 'Brussels', lat: 50.85, lon: 4.35 },
-            { name: 'Lisbon', lat: 38.72, lon: -9.14 },
-            { name: 'Stockholm', lat: 59.33, lon: 18.07 },
-            { name: 'Dublin', lat: 53.35, lon: -6.26 },
-            { name: 'Copenhagen', lat: 55.68, lon: 12.57 },
-            { name: 'Helsinki', lat: 60.17, lon: 24.94 },
-            { name: 'Oslo', lat: 59.91, lon: 10.75 },
-            { name: 'Athens', lat: 37.98, lon: 23.73 },
-            // Eastern Europe
-            { name: 'Kyiv', lat: 50.45, lon: 30.52 },
-            { name: 'Kharkiv', lat: 49.99, lon: 36.23 },
-            { name: 'Bucharest', lat: 44.43, lon: 26.10 },
-            { name: 'Warsaw', lat: 52.23, lon: 21.01 },
-            { name: 'Budapest', lat: 47.50, lon: 19.04 },
-            { name: 'Prague', lat: 50.08, lon: 14.44 },
-            { name: 'Sofia', lat: 42.70, lon: 23.32 },
-            { name: 'Belgrade', lat: 44.82, lon: 20.46 },
-            { name: 'Minsk', lat: 53.90, lon: 27.57 },
-            // North America — USA
-            { name: 'New York', lat: 40.71, lon: -74.01 },
-            { name: 'Los Angeles', lat: 34.05, lon: -118.24 },
-            { name: 'Chicago', lat: 41.88, lon: -87.63 },
-            { name: 'Houston', lat: 29.76, lon: -95.37 },
-            { name: 'Phoenix', lat: 33.45, lon: -112.07 },
-            { name: 'Philadelphia', lat: 39.95, lon: -75.17 },
-            { name: 'San Antonio', lat: 29.42, lon: -98.49 },
-            { name: 'San Diego', lat: 32.72, lon: -117.16 },
-            { name: 'Dallas', lat: 32.78, lon: -96.80 },
-            { name: 'San Jose', lat: 37.34, lon: -121.89 },
-            { name: 'Austin', lat: 30.27, lon: -97.74 },
-            { name: 'San Francisco', lat: 37.77, lon: -122.42 },
-            // Canada
-            { name: 'Toronto', lat: 43.65, lon: -79.38 },
-            { name: 'Montreal', lat: 45.50, lon: -73.57 },
-            { name: 'Vancouver', lat: 49.28, lon: -123.12 },
-            { name: 'Calgary', lat: 51.05, lon: -114.07 },
-            { name: 'Edmonton', lat: 53.55, lon: -113.49 },
-            { name: 'Ottawa', lat: 45.42, lon: -75.70 },
-            // Mexico
-            { name: 'Mexico City', lat: 19.43, lon: -99.13 },
-            { name: 'Guadalajara', lat: 20.67, lon: -103.35 },
-            { name: 'Monterrey', lat: 25.67, lon: -100.31 },
-            { name: 'Puebla', lat: 19.04, lon: -98.20 },
-            { name: 'Tijuana', lat: 32.51, lon: -117.02 },
-            { name: 'León', lat: 21.12, lon: -101.68 },
-            // Caribbean & Central America
-            { name: 'Havana', lat: 23.11, lon: -82.37 },
-            { name: 'Santo Domingo', lat: 18.49, lon: -69.93 },
-            { name: 'Guatemala City', lat: 14.63, lon: -90.51 },
-            { name: 'Panama City', lat: 8.98, lon: -79.52 },
-            // South America
-            { name: 'São Paulo', lat: -23.55, lon: -46.63 },
-            { name: 'Rio de Janeiro', lat: -22.91, lon: -43.17 },
-            { name: 'Brasília', lat: -15.79, lon: -47.88 },
-            { name: 'Salvador', lat: -12.97, lon: -38.51 },
-            { name: 'Fortaleza', lat: -3.72, lon: -38.53 },
-            { name: 'Belo Horizonte', lat: -19.92, lon: -43.94 },
-            { name: 'Manaus', lat: -3.12, lon: -60.02 },
-            { name: 'Curitiba', lat: -25.43, lon: -49.27 },
-            { name: 'Recife', lat: -8.05, lon: -34.87 },
-            { name: 'Porto Alegre', lat: -30.03, lon: -51.23 },
-            { name: 'Belém', lat: -1.46, lon: -48.50 },
-            { name: 'Goiânia', lat: -16.68, lon: -49.26 },
-            { name: 'Buenos Aires', lat: -34.60, lon: -58.38 },
-            { name: 'Córdoba', lat: -31.42, lon: -64.18 },
-            { name: 'Rosario', lat: -32.95, lon: -60.65 },
-            { name: 'Lima', lat: -12.05, lon: -77.04 },
-            { name: 'Bogotá', lat: 4.71, lon: -74.07 },
-            { name: 'Medellín', lat: 6.25, lon: -75.56 },
-            { name: 'Cali', lat: 3.44, lon: -76.52 },
-            { name: 'Barranquilla', lat: 10.96, lon: -74.78 },
-            { name: 'Santiago', lat: -33.45, lon: -70.67 },
-            { name: 'Caracas', lat: 10.49, lon: -66.88 },
-            { name: 'Maracaibo', lat: 10.63, lon: -71.63 },
-            { name: 'Quito', lat: -0.18, lon: -78.47 },
-            { name: 'Guayaquil', lat: -2.17, lon: -79.92 },
-            { name: 'La Paz', lat: -16.50, lon: -68.15 },
-            { name: 'Santa Cruz', lat: -17.78, lon: -63.18 },
-            { name: 'Montevideo', lat: -34.90, lon: -56.19 },
-            { name: 'Asunción', lat: -25.26, lon: -57.58 },
-            // Oceania
-            { name: 'Sydney', lat: -33.87, lon: 151.21 },
-            { name: 'Melbourne', lat: -37.81, lon: 144.96 },
-            { name: 'Brisbane', lat: -27.47, lon: 153.03 },
-            { name: 'Perth', lat: -31.95, lon: 115.86 },
-            { name: 'Adelaide', lat: -34.93, lon: 138.60 },
-            { name: 'Auckland', lat: -36.85, lon: 174.76 }
-        ];
-
-        // Fetch mean daytime temperatures for all major cities on a given date
-        async function fetchCityTemperatures(dateStr) {
-            const today = new Date();
-            const target = new Date(dateStr + 'T00:00:00');
-            const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
-            const isHistorical = diffDays < -5;
-            const baseUrl = isHistorical
-                ? 'https://archive-api.open-meteo.com/v1/archive'
-                : 'https://api.open-meteo.com/v1/forecast';
-
-            // Batch cities into groups of 50 (URL length limits)
-            const batchSize = 50;
-            const results = [];
-            const batches = [];
-            for (let i = 0; i < majorCities.length; i += batchSize) {
-                batches.push(majorCities.slice(i, i + batchSize));
-            }
-
-            // Fetch all batches in parallel
-            const batchResults = await Promise.allSettled(batches.map(async (batch) => {
-                const lats = batch.map(c => c.lat).join(',');
-                const lons = batch.map(c => c.lon).join(',');
-                const url = `${baseUrl}?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,is_day&start_date=${dateStr}&end_date=${dateStr}&timezone=auto`;
-                const resp = await fetch(url);
-                return { batch, json: await resp.json() };
-            }));
-
-            batchResults.forEach(result => {
-                if (result.status === 'fulfilled') {
-                    const { batch, json } = result.value;
-                    const items = Array.isArray(json) ? json : [json];
-                    items.forEach((item, idx) => {
-                        const cap = batch[idx];
-                        let meanTempC = null;
-                        if (item.hourly && item.hourly.temperature_2m && item.hourly.is_day) {
-                            let s = 0, c = 0;
-                            for (let h = 0; h < item.hourly.temperature_2m.length; h++) {
-                                if (item.hourly.is_day[h]) {
-                                    s += item.hourly.temperature_2m[h];
-                                    c++;
-                                }
-                            }
-                            if (c > 0) meanTempC = s / c;
-                        }
-                        results.push({ name: cap.name, lat: cap.lat, lon: cap.lon, meanTempC });
-                    });
-                } else {
-                    console.error('Batch fetch failed:', result.reason);
-                }
-            });
-            return results;
-        }
-        */ // end similar button comment
 
         // Handle keyboard navigation for days
         document.addEventListener('keydown', async (e) => {

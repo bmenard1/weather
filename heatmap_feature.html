@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  WORLD-MAP TEMPERATURE HEATMAP — extracted feature (NOT a runnable page)
+  ============================================================================
+
+  This file preserves the full heatmap implementation that previously lived in
+  index.html. It was removed from index.html to keep the app file lean. Keep
+  this as the reference for re-integrating the feature later.
+
+  WHAT IT DID
+  -----------
+  Filled the world-map land masses with a smooth temperature color field
+  (mean daytime temps worldwide). A 10° lat/lon grid (~540 points) was fetched
+  from Open-Meteo, rendered to a tiny 36×15 offscreen canvas, stretched over
+  the map with bilinear smoothing, and clipped to country polygons. The colors
+  faded out a few seconds after the map appeared, leaving only outlines + dot.
+
+  ============================================================================
+  RE-INTEGRATION CHECKLIST (where each piece went in index.html)
+  ============================================================================
+  All snippets below live inside the main <script> block.
+
+  1. CONSTANT — near the other cache-size constants:
+       const MAX_HEATMAP_CACHE_ENTRIES = 60;
+
+  2. STATE + FADE FNS + GRID CONSTANTS — just before fetchHeatmapGrid
+     (see <!-- BLOCK A --> below).
+
+  3. fetchHeatmapGrid()  (see <!-- BLOCK B --> below).
+       NOTE: the live version had `if (!HEATMAP_ENABLED) return null;` as a
+       master toggle. When re-integrating, either drop that guard or define
+       `const HEATMAP_ENABLED = true;`.
+
+  4. drawHeatmapOverlay()  (see <!-- BLOCK C --> below) — defined just before
+     drawWorldMapBackground().
+
+  5. HOOKS into the world-map render/animate/show functions (see
+     <!-- BLOCK D --> below). These describe the exact param/call changes that
+     must be re-applied to drawWorldMapBackground / drawWorldMap /
+     animateDotTransition / showWorldMap / scheduleMapFadeOut / resizeWorldMap /
+     map-click handler / refreshView. After removal these functions no longer
+     carry the heatmapGridData/heatmapAlpha params.
+
+  DEPENDENCIES used by this code (already present in index.html):
+    getTempColor, projectGeo, colorToString, fetchJsonWithRetry,
+    getBoundedCacheEntry, setBoundedCacheEntry, formatDateInTimeZone,
+    diffDateStrings, USER_TIME_ZONE, worldMapPolygons, currentMapBounds,
+    currentMapLat, currentMapLon, currentExtraDots, getDateForOffset, cities,
+    currentCity, currentDayOffset.
+  ============================================================================
+-->
+<script>
+/* ===========================================================================
+   BLOCK A — state, fade animation, and grid constants
+   (place just before fetchHeatmapGrid)
+   =========================================================================== */
+
+// Heatmap overlay state
+const HEATMAP_ENABLED = true; // master toggle
+let heatmapGridCache = {};     // dateStr → 2D array [row][col] of tempC
+const heatmapGridCacheOrder = [];
+let currentHeatmapGrid = null; // currently loaded grid data
+let heatmapFadeTimeout = null; // delay before fade starts
+let heatmapFadeAnimId = null;  // RAF id for fade animation
+
+// Fade out heatmap over ~1 second, leaving only outlines + city dot
+function startHeatmapFade(canvas) {
+    if (heatmapFadeAnimId) { cancelAnimationFrame(heatmapFadeAnimId); heatmapFadeAnimId = null; }
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const duration = 1000;
+    const startTime = performance.now();
+    function frame(now) {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / duration);
+        const alpha = 1 - t; // 1 → 0
+        ctx.setTransform(2, 0, 0, 2, 0, 0);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots, currentHeatmapGrid, alpha);
+        if (t < 1) {
+            heatmapFadeAnimId = requestAnimationFrame(frame);
+        } else {
+            heatmapFadeAnimId = null;
+        }
+    }
+    heatmapFadeAnimId = requestAnimationFrame(frame);
+}
+
+function cancelHeatmapFade() {
+    if (heatmapFadeTimeout) { clearTimeout(heatmapFadeTimeout); heatmapFadeTimeout = null; }
+    if (heatmapFadeAnimId) { cancelAnimationFrame(heatmapFadeAnimId); heatmapFadeAnimId = null; }
+}
+
+function scheduleHeatmapFade(canvas) {
+    cancelHeatmapFade();
+    heatmapFadeTimeout = setTimeout(() => {
+        heatmapFadeTimeout = null;
+        startHeatmapFade(canvas);
+    }, 6000);
+}
+const HEATMAP_LAT_MIN = -60, HEATMAP_LAT_MAX = 80;
+const HEATMAP_LON_MIN = -180, HEATMAP_LON_MAX = 170;
+const HEATMAP_STEP = 10;
+const HEATMAP_ROWS = 15; // (80 - (-60)) / 10 + 1
+const HEATMAP_COLS = 36; // (170 - (-180)) / 10 + 1
+
+
+/* ===========================================================================
+   BLOCK B — fetch the temperature grid
+   =========================================================================== */
+
+// Fetch temperature grid for heatmap overlay
+async function fetchHeatmapGrid(dateStr) {
+    if (!HEATMAP_ENABLED) return null;
+    const cachedGrid = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
+    if (cachedGrid) return cachedGrid;
+
+    // Generate grid points
+    const gridPoints = [];
+    for (let row = 0; row < HEATMAP_ROWS; row++) {
+        for (let col = 0; col < HEATMAP_COLS; col++) {
+            gridPoints.push({
+                lat: HEATMAP_LAT_MIN + row * HEATMAP_STEP,
+                lon: HEATMAP_LON_MIN + col * HEATMAP_STEP,
+                row, col
+            });
+        }
+    }
+
+    // Choose API based on date
+    const todayDateStr = formatDateInTimeZone(new Date(), USER_TIME_ZONE);
+    const diffDays = diffDateStrings(dateStr, todayDateStr);
+    const isHistorical = diffDays < -5;
+    const baseUrl = isHistorical
+        ? 'https://archive-api.open-meteo.com/v1/archive'
+        : 'https://api.open-meteo.com/v1/forecast';
+
+    // Batch into groups of 50
+    const batchSize = 50;
+    const batches = [];
+    for (let i = 0; i < gridPoints.length; i += batchSize) {
+        batches.push(gridPoints.slice(i, i + batchSize));
+    }
+
+    // Initialize result grid
+    const grid = [];
+    for (let r = 0; r < HEATMAP_ROWS; r++) {
+        grid.push(new Array(HEATMAP_COLS).fill(null));
+    }
+
+    // Fetch all batches in parallel
+    const batchResults = await Promise.allSettled(batches.map(async (batch) => {
+        const lats = batch.map(p => p.lat).join(',');
+        const lons = batch.map(p => p.lon).join(',');
+        const url = `${baseUrl}?latitude=${lats}&longitude=${lons}&hourly=temperature_2m,is_day&start_date=${dateStr}&end_date=${dateStr}&timezone=auto`;
+        const json = await fetchJsonWithRetry(url, { retries: 1, timeoutMs: 15000 });
+        return { batch, json };
+    }));
+
+    batchResults.forEach(result => {
+        if (result.status === 'fulfilled') {
+            const { batch, json } = result.value;
+            const items = Array.isArray(json) ? json : [json];
+            items.forEach((item, idx) => {
+                const pt = batch[idx];
+                if (item.hourly && item.hourly.temperature_2m && item.hourly.is_day) {
+                    let s = 0, c = 0;
+                    for (let h = 0; h < item.hourly.temperature_2m.length; h++) {
+                        if (item.hourly.is_day[h]) {
+                            s += item.hourly.temperature_2m[h];
+                            c++;
+                        }
+                    }
+                    if (c > 0) {
+                        grid[pt.row][pt.col] = s / c;
+                    } else {
+                        // All hours are night (polar), use overall mean
+                        const temps = item.hourly.temperature_2m.filter(t => t !== null);
+                        if (temps.length > 0) {
+                            grid[pt.row][pt.col] = temps.reduce((a, b) => a + b, 0) / temps.length;
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    setBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr, grid, MAX_HEATMAP_CACHE_ENTRIES);
+    return grid;
+}
+
+
+/* ===========================================================================
+   BLOCK C — render the heatmap overlay clipped to land
+   (define just before drawWorldMapBackground)
+   =========================================================================== */
+
+// Draw heatmap overlay clipped to land masses
+function drawHeatmapOverlay(ctx, mapBounds, polygons, gridData) {
+    // Build offscreen canvas with grid temperatures
+    const offscreen = document.createElement('canvas');
+    offscreen.width = HEATMAP_COLS;
+    offscreen.height = HEATMAP_ROWS;
+    const offCtx = offscreen.getContext('2d');
+    const imgData = offCtx.createImageData(HEATMAP_COLS, HEATMAP_ROWS);
+
+    for (let row = 0; row < HEATMAP_ROWS; row++) {
+        for (let col = 0; col < HEATMAP_COLS; col++) {
+            const tempC = gridData[row][col];
+            const idx = ((HEATMAP_ROWS - 1 - row) * HEATMAP_COLS + col) * 4; // flip Y: row 0 is -60° (bottom)
+            if (tempC !== null) {
+                const color = getTempColor((tempC + 25) / 60);
+                imgData.data[idx] = Math.round(color.r);
+                imgData.data[idx + 1] = Math.round(color.g);
+                imgData.data[idx + 2] = Math.round(color.b);
+                imgData.data[idx + 3] = 140; // ~0.55 alpha
+            }
+            // null cells stay transparent (0,0,0,0)
+        }
+    }
+    offCtx.putImageData(imgData, 0, 0);
+
+    // Clip to land polygons
+    ctx.save();
+    ctx.beginPath();
+    polygons.forEach(ring => {
+        if (ring.length < 3) return;
+        const allSouth = ring.every(pt => pt[1] < -60);
+        if (allSouth) return;
+        const first = projectGeo(ring[0][0], ring[0][1], mapBounds);
+        ctx.moveTo(first.x, first.y);
+        for (let i = 1; i < ring.length; i++) {
+            const p = projectGeo(ring[i][0], ring[i][1], mapBounds);
+            const lonJump = Math.abs(ring[i][0] - ring[i - 1][0]);
+            if (lonJump > 90) {
+                ctx.moveTo(p.x, p.y);
+            } else {
+                ctx.lineTo(p.x, p.y);
+            }
+        }
+    });
+    ctx.clip();
+
+    // Draw the tiny heatmap stretched to map bounds with bilinear smoothing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // Map the grid's lat/lon range to canvas pixel coordinates
+    const topLeft = projectGeo(HEATMAP_LON_MIN - HEATMAP_STEP / 2, HEATMAP_LAT_MAX + HEATMAP_STEP / 2, mapBounds);
+    const bottomRight = projectGeo(HEATMAP_LON_MAX + HEATMAP_STEP / 2, HEATMAP_LAT_MIN - HEATMAP_STEP / 2, mapBounds);
+    ctx.drawImage(offscreen, topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+
+    ctx.restore();
+}
+</script>
+
+<!--
+/* ===========================================================================
+   BLOCK D — integration hooks (apply these diffs back into the world-map fns)
+   ===========================================================================
+
+   drawWorldMapBackground: add `heatmapGridData, heatmapAlpha` params, and at
+   the top of the body draw the overlay + use a stronger outline when present:
+
+       function drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData, heatmapAlpha) {
+           if (HEATMAP_ENABLED && heatmapGridData && (heatmapAlpha === undefined || heatmapAlpha > 0.01)) {
+               ctx.save();
+               ctx.globalAlpha = heatmapAlpha !== undefined ? heatmapAlpha : 1;
+               drawHeatmapOverlay(ctx, mapBounds, polygons, heatmapGridData);
+               ctx.restore();
+           }
+           const hasHeatmap = heatmapGridData && (heatmapAlpha === undefined || heatmapAlpha > 0.01);
+           ctx.strokeStyle = hasHeatmap ? 'rgba(100, 130, 180, 0.5)' : 'rgba(100, 130, 180, 0.3)';
+           ...rest unchanged...
+       }
+
+   drawWorldMap: add `heatmapGridData, heatmapAlpha` params and forward them:
+       function drawWorldMap(ctx, polygons, cityLat, cityLon, mapBounds, extraDots, heatmapGridData, heatmapAlpha) {
+           drawWorldMapBackground(ctx, polygons, mapBounds, extraDots, heatmapGridData, heatmapAlpha);
+           drawCityDot(ctx, cityLat, cityLon, mapBounds);
+       }
+
+   animateDotTransition: add `showHeatmap` param; when drawing the cached
+   background use: drawWorldMapBackground(ctx, worldMapPolygons, currentMapBounds, currentExtraDots, showHeatmap ? currentHeatmapGrid : null);
+   (showWorldMap calls it with `false` for the already-visible dot animation.)
+
+   showWorldMap:
+     - call cancelHeatmapFade() at the top (and in the already-visible branch);
+     - after computing `dateStr`, fetch+cache the grid (only on first show):
+           const cachedHeatmap = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
+           if (cachedHeatmap) { currentHeatmapGrid = cachedHeatmap; }
+           else {
+               const requestedDateStr = dateStr;
+               fetchHeatmapGrid(requestedDateStr).then(grid => {
+                   const latestDateStr = getDateForOffset(cities[currentCity], currentDayOffset);
+                   if (latestDateStr !== requestedDateStr) return;
+                   currentHeatmapGrid = grid;
+                   if (canvas.classList.contains('visible') && currentMapBounds && worldMapPolygons) {
+                       const ctx = canvas.getContext('2d');
+                       const rect = canvas.getBoundingClientRect();
+                       ctx.setTransform(2, 0, 0, 2, 0, 0);
+                       ctx.clearRect(0, 0, rect.width, rect.height);
+                       drawWorldMap(ctx, worldMapPolygons, currentMapLat, currentMapLon, currentMapBounds, currentExtraDots, currentHeatmapGrid);
+                   }
+               }).catch(e => console.error('Heatmap fetch failed:', e));
+           }
+     - pass currentHeatmapGrid to the initial drawWorldMap(...) call;
+     - after scheduleMapFadeOut(canvas), also call scheduleHeatmapFade(canvas);
+
+   scheduleMapFadeOut: inside the cleanup timeout, also call cancelHeatmapFade();
+
+   resizeWorldMap & map-click handler: pass currentHeatmapGrid as the last arg
+   to their drawWorldMap(...) calls.
+
+   refreshView (after the year-band refresh): re-fetch the grid when the map is
+   visible and the viewed day changed, then resizeWorldMap():
+       const mapCanvas = document.getElementById('worldMapCanvas');
+       if (mapCanvas.classList.contains('visible') && currentMapBounds) {
+           const city = cities[currentCity];
+           const dateStr = getDateForOffset(city, currentDayOffset);
+           const cachedGrid = getBoundedCacheEntry(heatmapGridCache, heatmapGridCacheOrder, dateStr);
+           if (cachedGrid) {
+               currentHeatmapGrid = cachedGrid;
+               if (worldMapPolygons) resizeWorldMap();
+           } else {
+               fetchHeatmapGrid(dateStr).then(grid => {
+                   if (refreshToken !== refreshRequestToken) return;
+                   currentHeatmapGrid = grid;
+                   if (mapCanvas.classList.contains('visible') && currentMapBounds && worldMapPolygons) resizeWorldMap();
+               }).catch(error => { if (!isAbortError(error)) console.error('Heatmap fetch failed:', error); });
+           }
+       }
+   =========================================================================== */
+-->
