@@ -4523,12 +4523,9 @@
                 if (!wrapper.isConnected) return; // Picker already closed
                 locateBtn.disabled = false;
                 locateBtn.classList.remove('locating');
+                // Message stays until the next try or until the picker closes
                 locateText.textContent = message;
                 locateBtn.classList.add('failed');
-                setTimeout(() => {
-                    locateText.textContent = '';
-                    locateBtn.classList.remove('failed');
-                }, 4000);
                 input.focus(); // Typed-city entry keeps working as before
             }
 
