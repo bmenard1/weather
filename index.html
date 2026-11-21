@@ -488,18 +488,42 @@
         .locate-btn.failed {
             color: rgba(255, 190, 170, 0.9);
         }
-        /* Touch layout: keep input + button side by side in flow so nothing runs off-screen */
+        /* Touch layout: the picker takes the full row and opens where the city label sits
+           (left on phones in portrait, centered otherwise); input + button stay in flow */
         body.touch-device .city-input-wrapper {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 6px;
+            justify-content: inherit;
+            gap: 8px;
+            width: 100%;
+            min-width: 0;
+        }
+        body.touch-device .city-input {
+            font-size: 16px; /* iOS Safari zooms the page when a focused input is smaller than 16px */
+            letter-spacing: 0.5px;
+            padding: 7px 14px;
+            flex: 0 1 190px;
+            min-width: 0;
+            width: auto;
         }
         body.touch-device .locate-btn {
             position: static;
             transform: none;
             margin-left: 0;
-            padding: 8px; /* larger tap target */
+            flex: none;
+            min-width: 38px;
+            min-height: 38px; /* comfortable tap target, same height as the field */
+            justify-content: center;
+            border-radius: 19px;
+            font-size: 0.75rem;
+        }
+        body.touch-device .locate-btn svg {
+            width: 17px;
+            height: 17px;
+        }
+        /* Let "set as default" drop onto its own line under the city instead of pushing it sideways */
+        body.touch-device .city-label-wrapper {
+            flex-wrap: wrap;
         }
 
         .city-suggestions {
