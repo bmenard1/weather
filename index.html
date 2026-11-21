@@ -454,10 +454,27 @@
             font-family: inherit;
             font-size: 0.7rem;
             letter-spacing: 0.5px;
-            padding: 4px 10px;
+            padding: 5px 6px;
             cursor: pointer;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
             transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+        }
+        .locate-btn svg {
+            width: 14px;
+            height: 14px;
+            flex: none;
+        }
+        .locate-btn span:empty {
+            display: none;
+        }
+        .locate-btn.locating svg {
+            animation: locatePulse 1s ease-in-out infinite;
+        }
+        @keyframes locatePulse {
+            50% { opacity: 0.3; }
         }
         .locate-btn:hover:not(:disabled) {
             background: rgba(255, 255, 255, 0.12);
@@ -482,6 +499,7 @@
             position: static;
             transform: none;
             margin-left: 0;
+            padding: 8px; /* larger tap target */
         }
 
         .city-suggestions {
@@ -4491,20 +4509,24 @@
             const locateBtn = document.createElement('button');
             locateBtn.type = 'button';
             locateBtn.className = 'locate-btn';
-            locateBtn.textContent = 'use my location';
+            // Small GPS crosshair icon; the text span is only filled while locating or on failure
+            locateBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"/><path d="M8 1v2.8M8 12.2V15M1 8h2.8M12.2 8H15"/></svg><span></span>';
+            const locateText = locateBtn.querySelector('span');
+            locateBtn.title = 'Use my location';
             locateBtn.setAttribute('aria-label', 'Use my location');
-            locateBtn.setAttribute('aria-live', 'polite');
+            locateText.setAttribute('aria-live', 'polite');
             wrapper.appendChild(locateBtn);
 
-            // Show a short failure message in the button itself, then reset it
+            // Show a short failure message beside the icon, then reset it
             function locateFailed(message) {
                 locating = false;
                 if (!wrapper.isConnected) return; // Picker already closed
                 locateBtn.disabled = false;
-                locateBtn.textContent = message;
+                locateBtn.classList.remove('locating');
+                locateText.textContent = message;
                 locateBtn.classList.add('failed');
                 setTimeout(() => {
-                    locateBtn.textContent = 'use my location';
+                    locateText.textContent = '';
                     locateBtn.classList.remove('failed');
                 }, 4000);
                 input.focus(); // Typed-city entry keeps working as before
@@ -4519,8 +4541,9 @@
                 }
                 locating = true;
                 locateBtn.disabled = true;
-                locateBtn.textContent = 'Locating…';
+                locateText.textContent = 'Locating…';
                 locateBtn.classList.remove('failed');
+                locateBtn.classList.add('locating');
                 navigator.geolocation.getCurrentPosition(async (pos) => {
                     // Ignore if the picker was closed or a city was chosen meanwhile
                     if (!wrapper.isConnected || selectedSuggestion) return;
