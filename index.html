@@ -441,6 +441,49 @@
             text-align: center;
         }
 
+        .locate-btn {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            color: rgba(180, 190, 210, 0.7);
+            font-family: inherit;
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
+            padding: 4px 10px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+        }
+        .locate-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #e8eaef;
+        }
+        .locate-btn:disabled {
+            cursor: default;
+            opacity: 0.7;
+        }
+        .locate-btn.failed {
+            color: rgba(255, 190, 170, 0.9);
+        }
+        /* Touch layout: keep input + button side by side in flow so nothing runs off-screen */
+        body.touch-device .city-input-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        body.touch-device .locate-btn {
+            position: static;
+            transform: none;
+            margin-left: 0;
+        }
+
         .city-suggestions {
             position: absolute;
             top: 100%;
@@ -4442,6 +4485,59 @@
             suggestionsContainer.style.display = 'none';
             wrapper.appendChild(suggestionsContainer);
 
+            // "Use my location" button: asks for device position on click only,
+            // then feeds the result through the same selectCity() path as a typed city
+            let locating = false;
+            const locateBtn = document.createElement('button');
+            locateBtn.type = 'button';
+            locateBtn.className = 'locate-btn';
+            locateBtn.textContent = 'use my location';
+            locateBtn.setAttribute('aria-label', 'Use my location');
+            locateBtn.setAttribute('aria-live', 'polite');
+            wrapper.appendChild(locateBtn);
+
+            // Show a short failure message in the button itself, then reset it
+            function locateFailed(message) {
+                locating = false;
+                if (!wrapper.isConnected) return; // Picker already closed
+                locateBtn.disabled = false;
+                locateBtn.textContent = message;
+                locateBtn.classList.add('failed');
+                setTimeout(() => {
+                    locateBtn.textContent = 'use my location';
+                    locateBtn.classList.remove('failed');
+                }, 4000);
+                input.focus(); // Typed-city entry keeps working as before
+            }
+
+            locateBtn.addEventListener('mousedown', (e) => e.preventDefault()); // Keep input focus
+            locateBtn.addEventListener('click', () => {
+                if (locating) return;
+                if (!navigator.geolocation) {
+                    locateFailed('not supported');
+                    return;
+                }
+                locating = true;
+                locateBtn.disabled = true;
+                locateBtn.textContent = 'Locating…';
+                locateBtn.classList.remove('failed');
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                    // Ignore if the picker was closed or a city was chosen meanwhile
+                    if (!wrapper.isConnected || selectedSuggestion) return;
+                    // ~1 km precision, same rounding as a world-map click
+                    const lat = Math.round(pos.coords.latitude * 100) / 100;
+                    const lon = Math.round(pos.coords.longitude * 100) / 100;
+                    // reverseGeocode() falls back to rounded coordinates if the lookup fails
+                    const name = await reverseGeocode(lat, lon);
+                    if (!wrapper.isConnected || selectedSuggestion) return;
+                    selectCity({ name, lat, lon, timezone: 'auto' });
+                }, (err) => {
+                    locateFailed(err.code === 1 ? 'permission denied'
+                        : err.code === 3 ? 'timed out'
+                        : 'unavailable');
+                }, { timeout: 10000, maximumAge: 300000 });
+            });
+
             function showSuggestions(suggestions) {
                 suggestionsContainer.innerHTML = '';
                 if (suggestions.length === 0) {
@@ -4564,7 +4660,7 @@
             input.addEventListener('blur', () => {
                 // Small delay to allow click on suggestion
                 setTimeout(() => {
-                    if (isEditingCity && !selectedSuggestion) {
+                    if (isEditingCity && !selectedSuggestion && !locating) {
                         finishEdit();
                     }
                 }, 200);
