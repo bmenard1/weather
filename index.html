@@ -1640,6 +1640,12 @@
             const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
             try {
                 return await fetch(url, { ...fetchOptions, signal: merged.signal });
+            } catch (error) {
+                // Our own timeout is a network failure (retried), not a caller abort
+                if (isAbortError(error) && timeoutController.signal.aborted && !(signal && signal.aborted)) {
+                    throw new Error(`Timed out after ${timeoutMs} ms: ${url}`);
+                }
+                throw error;
             } finally {
                 clearTimeout(timer);
                 merged.cleanup();
@@ -2153,6 +2159,35 @@
         const yearBandCacheOrder = [];
         let yearBandCity = null; // Track which city the current band is for
 
+        // Last "today" fetched, kept on the device so the next visit paints at once
+        // while fresh data loads (stale-while-revalidate for the first screen)
+        const LAST_TODAY_KEY = 'weatherFlow_lastToday';
+        const LAST_TODAY_MAX_AGE = 12 * 60 * 60 * 1000;
+
+        function saveLastToday(cacheKey, data) {
+            try {
+                localStorage.setItem(LAST_TODAY_KEY, JSON.stringify({ cacheKey, fetchedAt: Date.now(), data }));
+            } catch (e) {}
+        }
+
+        // Puts the stored copy in the memory cache; returns its cache key, or null
+        function seedTodayFromStorage(cityKey) {
+            try {
+                const city = cities[cityKey];
+                if (!city) return null;
+                const cacheKey = `${cityKey}-${getDateForOffset(city, 0)}`;
+                const saved = JSON.parse(localStorage.getItem(LAST_TODAY_KEY) || 'null');
+                if (!saved || saved.cacheKey !== cacheKey || !saved.data ||
+                    !saved.data.precipMm || !saved.data.snowCm ||
+                    (Date.now() - saved.fetchedAt) > LAST_TODAY_MAX_AGE) return null;
+                setBoundedCacheEntry(weatherCache, weatherCacheOrder, cacheKey,
+                    { data: saved.data, fetchedAt: Date.now() }, MAX_WEATHER_CACHE_ENTRIES);
+                return cacheKey;
+            } catch (e) {
+                return null;
+            }
+        }
+
         // Load saved default city from localStorage
         function loadDefaultCity() {
             try {
@@ -2249,7 +2284,7 @@
             try {
                 const data = await fetchJsonWithRetry(url, {
                     retries: 1,
-                    timeoutMs: 15000,
+                    timeoutMs: 7000,
                     signal
                 });
 
@@ -2376,6 +2411,7 @@
                     { data: weatherData, fetchedAt: Date.now() },
                     MAX_WEATHER_CACHE_ENTRIES
                 );
+                if (dayOffset === 0) saveLastToday(cacheKey, weatherData);
                 return weatherData;
 
             } catch (error) {
@@ -5832,8 +5868,9 @@
 
         (async () => {
             const splash = document.getElementById('splashTitle');
+            const seededKey = seedTodayFromStorage(currentCity);
             try {
-                // Single API call for today's data
+                // Single API call for today's data (instant when a stored copy was seeded)
                 await updateWeatherData(currentCity, 0);
 
                 // Calculate temp range from today's data (synchronous, no extra API call)
@@ -5857,6 +5894,24 @@
                     splash.classList.add('hidden');
                     setTimeout(() => splash.remove(), 1200);
                 }, 2000);
+            }
+
+            // Painted from the stored copy: fetch fresh data now and redraw if it arrives
+            if (seededKey) {
+                const seededCity = currentCity;
+                removeBoundedCacheEntry(weatherCache, weatherCacheOrder, seededKey);
+                try {
+                    const fresh = await fetchWeatherData(seededCity, 0);
+                    // A failed fetch returns placeholder data and caches nothing: keep the stored copy
+                    const cached = getBoundedCacheEntry(weatherCache, weatherCacheOrder, seededKey);
+                    if (cached && cached.data === fresh && currentCity === seededCity && currentDayOffset === 0) {
+                        await updateWeatherData(seededCity, 0);
+                        calculateTempRangeFromData(fullWeatherData);
+                        drawImmediate();
+                    }
+                } catch (e) {
+                    console.error('Refresh after stored paint failed:', e);
+                }
             }
 
             // Background: refine temp range, year band, prefetch
