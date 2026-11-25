@@ -4610,7 +4610,8 @@
                     // reverseGeocode() falls back to rounded coordinates if the lookup fails
                     const name = await reverseGeocode(lat, lon);
                     if (!wrapper.isConnected || selectedSuggestion) return;
-                    selectCity({ name, lat, lon, timezone: 'auto' });
+                    // No world map (and so no year band) for "my location": the user knows where they are
+                    selectCity({ name, lat, lon, timezone: 'auto' }, { showMap: false });
                 }, (err) => {
                     locateFailed(err.code === 1 ? 'permission denied'
                         : err.code === 3 ? 'timed out'
@@ -4653,7 +4654,7 @@
                 suggestionsContainer.style.display = 'block';
             }
 
-            async function selectCity(suggestion) {
+            async function selectCity(suggestion, { showMap = true } = {}) {
                 selectedSuggestion = suggestion;
 
                 // Create a new city entry
@@ -4675,7 +4676,7 @@
                 // Prefetch remaining days for new city
                 prefetchRemainingDays(cityKey);
                 // Show world map with animated dot transition
-                showWorldMap(suggestion.lat, suggestion.lon);
+                if (showMap) showWorldMap(suggestion.lat, suggestion.lon);
             }
 
             function restoreLabel(name) {
